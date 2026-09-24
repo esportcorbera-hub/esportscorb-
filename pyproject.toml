@@ -30,5 +30,6 @@ dependencies = [
   "gunicorn==23.0.0",
 ]
 
+
 [tool.vercel.scripts]
-build = 'if [ -n "$DATABASE_URL" ]; then python manage.py migrate --noinput && python seed_facilities.py; fi'
+build = 'if [ -n "$DATABASE_URL" ]; then python manage.py migrate --noinput && python seed_facilities.py && python seed_entities.py; fi'
