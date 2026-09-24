@@ -18,6 +18,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.utils.dateparse import parse_datetime
 
 # 1. HOME PÚBLIC
 def home(request):
@@ -362,10 +363,25 @@ def api_reserves(request):
     es_staff = request.user.is_authenticated and request.user.is_staff
     es_conserge = request.user.is_authenticated and request.user.groups.filter(name="Conserge").exists()
 
+    # FullCalendar sends an inclusive start and exclusive end for the visible view.
+    # Restrict the response to events overlapping that range.
+    rang_start = parse_datetime(request.GET.get("start", ""))
+    rang_end = parse_datetime(request.GET.get("end", ""))
+    if rang_start and timezone.is_naive(rang_start):
+        rang_start = timezone.make_aware(rang_start)
+    if rang_end and timezone.is_naive(rang_end):
+        rang_end = timezone.make_aware(rang_end)
+
     if es_staff:
         reserves = Reserva.objects.all()
     else:
         reserves = Reserva.objects.filter(estat='validada').exclude(activitat__icontains='CONSERGE')
+
+    if rang_start and rang_end and rang_end > rang_start:
+        reserves = reserves.filter(inici__lt=rang_end, final__gt=rang_start)
+
+    # Load each reservation's facility and parent in the same query.
+    reserves = reserves.select_related('instalacio', 'instalacio__parent')
     
     events = []
 
@@ -399,6 +415,10 @@ def api_reserves(request):
     if es_staff or es_conserge:
         try:
             activitats_extra = ActivitatExtra.objects.all()
+            if rang_start and rang_end and rang_end > rang_start:
+                data_inici = timezone.localtime(rang_start).date()
+                data_final = timezone.localtime(rang_end).date()
+                activitats_extra = activitats_extra.filter(data__gte=data_inici, data__lte=data_final)
             for act in activitats_extra:
                 if act.data and act.inici and act.final:
                     events.append({
