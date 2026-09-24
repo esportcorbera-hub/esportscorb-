@@ -46,27 +46,32 @@ def seed_entities():
 
 def seed_technician():
     password = os.environ.get('TECHNIC_INITIAL_PASSWORD')
-    if not password:
-        print('Technician account skipped: TECHNIC_INITIAL_PASSWORD is not configured.')
-        return
+    created = False
 
     with transaction.atomic():
-        user, created = User.objects.get_or_create(
-            username='TECNIC',
-            defaults={'is_staff': True},
-        )
-        if created:
-            user.set_password(password)
-            user.save(update_fields=['password'])
-        elif not user.is_staff:
+        user = User.objects.filter(username='TECNIC').first()
+        if user is None:
+            if not password:
+                print('Technician account skipped: no account exists and no initial password is configured.')
+                return
+            user = User.objects.create_user(username='TECNIC', password=password)
+            created = True
+
+        changes = []
+        if not user.is_staff:
             user.is_staff = True
-            user.save(update_fields=['is_staff'])
+            changes.append('is_staff')
+        if not user.is_superuser:
+            user.is_superuser = True
+            changes.append('is_superuser')
+        if changes:
+            user.save(update_fields=changes)
 
         group, _ = Group.objects.get_or_create(name='Tècnic')
         user.groups.add(group)
 
-    state = 'created' if created else 'already present'
-    print(f'Technician account {state}; staff access ensured.')
+    state = 'created' if created else 'updated' if changes else 'already configured'
+    print(f'Technician account {state}; full administrator access ensured.')
 
 
 if __name__ == '__main__':
