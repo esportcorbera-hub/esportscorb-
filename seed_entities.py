@@ -2,12 +2,13 @@ import csv
 import os
 import django
 from pathlib import Path
-from django.contrib.auth.models import User
-from django.db import transaction
-from django.utils.text import slugify
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'esportscorb.settings')
 django.setup()
+
+from django.contrib.auth.models import User
+from django.db import transaction
+from django.utils.text import slugify
 
 
 def seed_entities():
