@@ -31,4 +31,4 @@ dependencies = [
 ]
 
 [tool.vercel.scripts]
-build = "python manage.py migrate --noinput"
+build = 'if [ -n "$DATABASE_URL" ]; then python manage.py migrate --noinput && python seed_facilities.py; fi'
