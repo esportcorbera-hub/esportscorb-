@@ -287,8 +287,8 @@ def eliminar_reserva(request, pk):
     return redirect('gestionar_reserves')
 
 @staff_member_required
+@require_POST
 def eliminar_extra(request, pk):
-    # Busquem l'activitat extra (avís daurat)
     activitat = get_object_or_404(ActivitatExtra, pk=pk)
     activitat.delete()
     messages.success(request, "Activitat extraordinària eliminada.")
@@ -962,28 +962,31 @@ def buidar_plantilla(request):
     
     return redirect('gestio_plantilla')
 
+@staff_member_required
 def activitats_extra(request):
-    # 1. Si l'usuari envia el formulari (POST)
     if request.method == "POST":
-        titol = request.POST.get('titol')
-        data = request.POST.get('data')
-        inici = request.POST.get('inici')
-        final = request.POST.get('final')
-        
-        # Creem l'activitat a la base de dades
+        titol = request.POST.get('titol', '').strip()
+        data = request.POST.get('data', '')
+        inici = request.POST.get('inici', '')
+        final = request.POST.get('final', '')
+        try:
+            data_valida = datetime.strptime(data, '%Y-%m-%d').date()
+            inici_valid = datetime.strptime(inici, '%H:%M').time()
+            final_valid = datetime.strptime(final, '%H:%M').time()
+        except (TypeError, ValueError):
+            messages.error(request, "Comprova la data i la franja horària.")
+            return redirect('activitats_extra')
+        if not titol or len(titol) > 200 or final_valid <= inici_valid:
+            messages.error(request, "Indica un títol vàlid i una hora final posterior a la inicial.")
+            return redirect('activitats_extra')
         ActivitatExtra.objects.create(
-            titol=titol,
-            data=data,
-            inici=inici,
-            final=final,
-            tipus='extra' # Això és el que farà que es vegi daurat
+            titol=titol, data=data_valida, inici=inici_valid, final=final_valid, tipus='extra'
         )
-        return redirect('activitats_extra') # Recarreguem per netejar el formulari
+        messages.success(request, "L’avís s’ha afegit al calendari dels conserges.")
+        return redirect('activitats_extra')
 
-    # 2. Si l'usuari només entra a la pàgina (GET)
     activitats = ActivitatExtra.objects.all().order_by('-data')
     return render(request, 'reservescorbera/activitats_extra.html', {'activitats': activitats})
-
 
 from django.contrib.auth.models import User
 
