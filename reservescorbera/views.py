@@ -32,6 +32,11 @@ def home(request):
     return render(request, 'reservescorbera/home.html', context)
 
 @login_required
+def instancies(request):
+    return render(request, 'reservescorbera/instancies.html')
+
+
+@login_required
 def inici(request):
     # 1. PROCESSAR ACCIONS DEL TÈCNIC (POST)
     if request.method == "POST" and request.user.is_staff:
