@@ -761,7 +761,11 @@ def aplicar_plantilla_al_calendari(request):
         # 2. CALCULEM EL DILLUNS (Això és el que mou les reserves de lloc)
         dilluns_setmana = dia_referencia - timedelta(days=dia_referencia.weekday())
         
-        plantilla = PlantillaReserva.objects.all()
+        plantilla = PlantillaReserva.objects.exclude(
+            instalacio__nom__icontains='personal esports'
+        ).exclude(
+            instalacio__nom__icontains='extraordin'
+        )
         creades = 0
         
         for item in plantilla:
@@ -808,7 +812,11 @@ def gestio_plantilla(request):
             t_inici = datetime.strptime(h_inici_str, '%H:%M').time()
             t_final = datetime.strptime(h_final_str, '%H:%M').time()
             
-            inst = Instalacio.objects.get(id=inst_id)
+            inst = Instalacio.objects.filter(parent__isnull=True).exclude(
+                nom__icontains='personal esports'
+            ).exclude(
+                nom__icontains='extraordin'
+            ).get(id=inst_id)
 
             if t_inici < inst.hora_obertura or t_final > inst.hora_tancament:
                 messages.error(request, f"Error: {inst.nom} només obre de {inst.hora_obertura.strftime('%H:%M')} a {inst.hora_tancament.strftime('%H:%M')}.")
@@ -846,11 +854,21 @@ def gestio_plantilla(request):
 
     # --- PREPARACIÓ DE DADES PER AL RENDER (MODIFICAT) ---
     
-    elements = PlantillaReserva.objects.all().order_by('inici')
+    elements = PlantillaReserva.objects.filter(
+        instalacio__parent__isnull=True
+    ).exclude(
+        instalacio__nom__icontains='personal esports'
+    ).exclude(
+        instalacio__nom__icontains='extraordin'
+    ).order_by('inici')
     
     # CANVI AQUÍ: Filtrem perquè només surtin les instal·lacions principals (sense pare)
     # He posat 'parent__isnull', canvia-ho per 'instalacio_pare__isnull' si el teu camp es diu així
-    instalacions = Instalacio.objects.filter(parent__isnull=True)
+    instalacions = Instalacio.objects.filter(parent__isnull=True).exclude(
+        nom__icontains='personal esports'
+    ).exclude(
+        nom__icontains='extraordin'
+    )
     
     usuaris = User.objects.exclude(username='marti').order_by('username')
     franges = [f"{h:02d}:{m:02d}" for h in range(8, 24) for m in [0, 15, 30, 45]]
@@ -894,7 +912,8 @@ def editar_plantilla(request, pk):
     
     if request.method == 'POST':
         item.dia_setmana = int(request.POST.get('dia_setmana'))
-        item.instalacio_id = request.POST.get('instalacio')
+        instalacio_nova = instalacions.get(pk=request.POST.get('instalacio'))
+        item.instalacio = instalacio_nova
         item.user_id = request.POST.get('usuari')
         item.inici = request.POST.get('inici')
         item.final = request.POST.get('final')
@@ -906,7 +925,11 @@ def editar_plantilla(request, pk):
         return redirect('gestio_plantilla')
     
     # Per l'edició, necessitem les mateixes dades que a la vista general
-    instalacions = Instalacio.objects.all()
+    instalacions = Instalacio.objects.filter(parent__isnull=True).exclude(
+        nom__icontains='personal esports'
+    ).exclude(
+        nom__icontains='extraordin'
+    )
     usuaris = User.objects.exclude(username='marti')
     franges = [f"{h:02d}:{m:02d}" for h in range(8, 24) for m in [0, 15, 30, 45]]
     dies_setmana = [(0, 'Dilluns'), (1, 'Dimarts'), (2, 'Dimecres'), (3, 'Dijous'), (4, 'Divendres'), (5, 'Dissabte'), (6, 'Diumenge')]
