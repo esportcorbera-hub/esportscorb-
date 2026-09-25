@@ -68,7 +68,7 @@
         <div class="row mb-4">
             <div class="col-12">
                 <h1 class="h3 fw-bold mb-1">Gestió d'Activitats Extraordinàries</h1>
-                <p class="text-muted">Afegeix avisos globals que es veuran en daurat al calendari.</p>
+                <p class="text-muted">Afegeix un avís amb data i franja horària. El veuran els conserges al seu calendari; no apareixerà al calendari general de les entitats.</p>
             </div>
         </div>
 
@@ -80,6 +80,7 @@
                         <h5 class="mb-0 small fw-bold text-uppercase tracking-wider">Nova Activitat</h5>
                     </div>
                     <div class="card-body p-4">
+                        {% if messages %}{% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }} py-2">{{ message }}</div>{% endfor %}{% endif %}
                         <form method="POST">
                             {% csrf_token %}
                             <div class="mb-3">
@@ -139,11 +140,12 @@
                                             </div>
                                         </td>
                                         <td class="text-end pe-4">
-                                            <!-- CANVI REALITZAT AQUÍ: eliminar_reserva -->
-                                            <button onclick="confirmarEliminacio('{% url 'eliminar_extra' act.id %}')" 
-                                                    class="btn btn-outline-danger btn-sm border-0">
-                                                <i class="bi bi-trash3-fill"></i>
-                                            </button>
+                                            <form method="post" action="{% url 'eliminar_extra' act.id %}" onsubmit="return confirm('Eliminar aquest avís del calendari dels conserges?')">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-outline-danger btn-sm border-0" aria-label="Eliminar avís">
+                                                    <i class="bi bi-trash3-fill"></i>
+                                                </button>
+                                            </form>
                                         </td>
                                     </tr>
                                     {% empty %}
@@ -163,26 +165,5 @@
         </div>
     </div>
 
-    <!-- SCRIPTS -->
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script>
-        function confirmarEliminacio(url) {
-            Swal.fire({
-                title: 'Eliminar?',
-                text: "Aquest avís desapareixerà del calendari immediatament.",
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#dc3545',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Sí, eliminar',
-                cancelButtonText: 'No, mantenir',
-                heightAuto: false
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.location.href = url;
-                }
-            })
-        }
-    </script>
 </body>
 </html>
