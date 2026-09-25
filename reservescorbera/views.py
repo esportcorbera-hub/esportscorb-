@@ -332,36 +332,40 @@ from datetime import timedelta
 from django.http import JsonResponse
 
 def api_hores_ocupades(request):
-    dia_triat = request.GET.get('data') 
+    dia_triat = request.GET.get('data')
     inst_id = request.GET.get('instalacio')
-    
+
     if not dia_triat or not inst_id:
         return JsonResponse([], safe=False)
 
-    # 1. Busquem les reserves. 
+    instalacio = get_object_or_404(Instalacio, pk=inst_id)
+    ids_en_conflicte = {instalacio.pk}
+
+    if instalacio.parent_id:
+        # Una reserva d'una meitat bloqueja la mateixa meitat i el camp sencer,
+        # però deixa lliure l'altra meitat.
+        ids_en_conflicte.add(instalacio.parent_id)
+    else:
+        # Reservar el camp sencer bloqueja totes les seves subdivisions.
+        ids_en_conflicte.update(
+            instalacio.sub_espais.values_list('pk', flat=True)
+        )
+
     reserves = Reserva.objects.filter(
-        instalacio_id=inst_id, 
-        inici__date=dia_triat, 
+        instalacio_id__in=ids_en_conflicte,
+        inici__date=dia_triat,
         estat__in=['pendent', 'validada']
     )
-    
-    ocupades = set() # Usem un set per evitar duplicats automàticament
-    
-    for r in reserves:
-        # Convertim a hora local perquè coincideixi amb el que l'usuari veu al formulari
-        # Si no uses zones horàries, r.inici i r.final ja estaran bé
-        inici = timezone.localtime(r.inici)
-        final = timezone.localtime(r.final)
-        
-        actual = inici
-        # EL TRUC: Mentre sigui MENOR que el final (no menor o igual)
-        # Si la reserva acaba a les 15:15, el bucle s'atura a les 15:00
+
+    ocupades = set()
+    for reserva in reserves:
+        actual = timezone.localtime(reserva.inici)
+        final = timezone.localtime(reserva.final)
         while actual < final:
             ocupades.add(actual.strftime('%H:%M'))
             actual += timedelta(minutes=15)
-            
-    # Retornem la llista ordenada
-    return JsonResponse(sorted(list(ocupades)), safe=False)
+
+    return JsonResponse(sorted(ocupades), safe=False)
 from .models import Reserva, ActivitatExtra  # Assegura't d'importar el nou model
 
 def api_reserves(request):
