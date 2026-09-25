@@ -207,7 +207,7 @@ def gestio_tecnica(request):
     totes_les_reserves = Reserva.objects.all().order_by('-inici')[:50]
     
     # CANVI AQUÍ: Filtrem perquè només surtin les principals
-    totes_les_instalacions = Instalacio.objects.filter(parent__isnull=True).order_by('nom')
+    totes_les_instalacions = Instalacio.objects.filter(parent__isnull=True).exclude(nom__iexact='Activitats extraordinàries').order_by('nom')
     
     usuaris_filtrats = User.objects.exclude(username='marti').order_by('username')
 
