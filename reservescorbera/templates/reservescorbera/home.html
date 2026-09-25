@@ -45,10 +45,17 @@
         .sidebar h2 { font-size: 1.6rem; font-weight: 800; margin-bottom: 5px; }
         .sidebar p { font-size: 0.9rem; color: #777; line-height: 1.4; }
 
-        .custom-select {
-            width: 100%; padding: 12px; border: 2px solid var(--primary);
-            border-radius: 8px; font-weight: 700; outline: none; cursor: pointer;
-        }
+        .filter-box { width: 100%; }
+        .facility-filter { border: 0; padding: 0; margin: 0; }
+        .facility-filter legend { float: none; width: auto; margin-bottom: 12px; font-size: .9rem; font-weight: 700; }
+        .facility-list { display: flex; flex-direction: column; gap: 8px; max-height: 42vh; overflow-y: auto; padding-right: 4px; }
+        .facility-option { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: .88rem; }
+        .facility-option:hover { background: #f8f8f8; }
+        .facility-option input { order: 3; width: 12px; height: 12px; margin: 0 0 0 auto; accent-color: var(--primary); flex: 0 0 auto; }
+        .facility-option span { line-height: 1.25; }
+        .facility-option.all-option { font-weight: 700; border-color: #d8d8d8; }
+        .facility-dot { order: 1; width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; }
+        .facility-option span:not(.facility-dot) { order: 2; }
 
         /* Contenidor de la Imatge (Protegit contra ValueError) */
         #photo-container {
@@ -96,15 +103,19 @@
             </div>
 
             <div class="filter-box">
-                <select class="custom-select" id="selector-instalacio" onchange="actualitzarTot(this)">
-                    <option value="tots">Totes les instal·lacions</option>
+                <fieldset class="facility-filter" id="selector-instalacio">
+                    <legend>Tria les instal·lacions que vols veure</legend>
+                    <div class="facility-list">
+                        <label class="facility-option all-option">
+                            <input id="select-all-facilities" type="checkbox" checked>
+                            <span>Totes les instal·lacions</span>
+                        </label>
                     {% for inst in instalacions %}
-                        <option value="{{ inst.id }}" 
-                                data-img="{% if inst.nom == 'Camp futbol' or inst.nom == 'Camp de Futbol' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0249_vbmwmi{% elif inst.nom == 'Pista Cau de la guineu' or inst.nom == 'Cau de la Guineu' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0241_bqtxum{% elif inst.nom == 'Gimnàs Balmes' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0245_d1gmru{% elif inst.nom == 'Pavelló' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0252_huhcow{% elif inst.nom == 'Pista atletisme' or inst.nom == 'Pista Atletisme' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0250_xo2t7o{% elif inst.nom == 'Pista bàsquet Balmes' or inst.nom == 'Pista Bàsquet Balmes' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0244_o2lu5z{% elif inst.nom == 'Pista futsal  Balmes' or inst.nom == 'Pista futsal Balmes' or inst.nom == 'Pista Futsal Balmes' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0243_a5vpom{% elif inst.nom == 'Pista blanca' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0246_dosnfc{% elif inst.nom == 'Pista verda' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0247_oiqrwl{% elif inst.nom == "Pista Puig d'agulles" or inst.nom == "Puig d'Agulles" %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0240_z1caot{% elif inst.nom == 'Rocòdrom' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0253_cqp0mo{% elif inst.nom == 'Sala cycling' or inst.nom == 'Sala Cycling' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0248_if8jsh{% elif inst.nom == 'Sala sota grades' or inst.nom == 'Sala Grades' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0254_kf7lb5{% elif inst.nom == 'Sala pavelló' or inst.nom == 'Sala Pavelló' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0251_etqqvk{% elif inst.nom == 'Trial bike' or inst.nom == 'Trial Bike' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0242_qenuxj{% else %}none{% endif %}">
-                            {{ inst.nom }}
-                        </option>
+                        <label class="facility-option"><input class="facility-checkbox" type="checkbox" value="{{ inst.id }}" checked 
+                                data-img="{% if inst.nom == 'Camp futbol' or inst.nom == 'Camp de Futbol' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0249_vbmwmi{% elif inst.nom == 'Pista Cau de la guineu' or inst.nom == 'Cau de la Guineu' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0241_bqtxum{% elif inst.nom == 'Gimnàs Balmes' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0245_d1gmru{% elif inst.nom == 'Pavelló' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0252_huhcow{% elif inst.nom == 'Pista atletisme' or inst.nom == 'Pista Atletisme' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0250_xo2t7o{% elif inst.nom == 'Pista bàsquet Balmes' or inst.nom == 'Pista Bàsquet Balmes' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0244_o2lu5z{% elif inst.nom == 'Pista futsal  Balmes' or inst.nom == 'Pista futsal Balmes' or inst.nom == 'Pista Futsal Balmes' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0243_a5vpom{% elif inst.nom == 'Pista blanca' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0246_dosnfc{% elif inst.nom == 'Pista verda' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0247_oiqrwl{% elif inst.nom == "Pista Puig d'agulles" or inst.nom == "Puig d'Agulles" %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0240_z1caot{% elif inst.nom == 'Rocòdrom' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0253_cqp0mo{% elif inst.nom == 'Sala cycling' or inst.nom == 'Sala Cycling' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0248_if8jsh{% elif inst.nom == 'Sala sota grades' or inst.nom == 'Sala Grades' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0254_kf7lb5{% elif inst.nom == 'Sala pavelló' or inst.nom == 'Sala Pavelló' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0251_etqqvk{% elif inst.nom == 'Trial bike' or inst.nom == 'Trial Bike' %}https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0242_qenuxj{% else %}none{% endif %}"><span class="facility-dot" style="background-color: {{ inst.color|default:'#6c757d' }}"></span><span>{{ inst.nom }}</span></label>
                     {% endfor %}
-                </select>
+                    </div>
+                </fieldset>
             </div>
 
             <div id="photo-container">
@@ -144,37 +155,8 @@
                 buttonText: { today: 'Avui', month: 'Mes', week: 'Setmana', day: 'Dia' },
                 events: '/api/reserves/',
 
-                // AQUESTA FUNCIÓ S'EXECUTA CADA COP QUE UN EVENT ES MOSTRA
                 eventDidMount: function(info) {
-                    const selector = document.getElementById('selector-instalacio');
-                    if (!selector) return;
-
-                    const cerca = String(selector.value).trim(); // Ara conté l'ID de la instal·lació (ex: "5")
-                    const tipus = info.event.extendedProps.tipus;
-
-                    // 1. SEMPRE visible si triem "tots"
-                    if (cerca === 'tots') {
-                        info.el.style.display = '';
-                        return;
-                    }
-
-                    // 2. EXCEPCIONS: Avisos globals (Extres) o notes de conserge sempre es veuen
-                    if (tipus === 'extra' || tipus === 'conserge' || info.event.allDay) {
-                        info.el.style.display = '';
-                        return;
-                    }
-
-                    // 3. FILTRE PER ID (La clau de la jerarquia)
-                    // Passem a String per assegurar que la comparació és idèntica
-                    const idInst = String(info.event.extendedProps.id_inst || "");
-                    const idPare = String(info.event.extendedProps.id_pare || "");
-
-                    // Si la reserva és de la pista seleccionada O si la pista pare és la seleccionada
-                    if (idInst === cerca || idPare === cerca) {
-                        info.el.style.display = ''; 
-                    } else {
-                        info.el.style.display = 'none';
-                    }
+                    aplicarFiltreInstalacions();
                 },
 
                 eventClick: function(info) {
@@ -188,22 +170,53 @@
             calendar.render();
         });
 
-        function actualitzarTot(select) {
-            const val = String(select.value); // L'ID triat (ex: "60")
-            const opt = select.options[select.selectedIndex];
-            const dataImg = opt.getAttribute('data-img');
+        document.addEventListener('DOMContentLoaded', function() {
+            const totes = document.getElementById('select-all-facilities');
+            const caselles = Array.from(document.querySelectorAll('.facility-checkbox'));
 
-            // 1. Gestió de la sidebar (Imatges) - Això ja et funcionava
+            totes.addEventListener('change', function() {
+                caselles.forEach(casella => { casella.checked = totes.checked; });
+                actualitzarTot();
+            });
+
+            caselles.forEach(casella => casella.addEventListener('change', function() {
+                totes.checked = caselles.every(item => item.checked);
+                actualitzarTot();
+            }));
+        });
+
+        function aplicarFiltreInstalacions() {
+            if (!calendar) return;
+            const seleccionades = new Set(
+                Array.from(document.querySelectorAll('.facility-checkbox:checked')).map(casella => casella.value)
+            );
+
+            calendar.getEvents().forEach(ev => {
+                const idInst = String(ev.extendedProps.id_inst || '');
+                const idPare = String(ev.extendedProps.id_pare || '');
+                const tipus = ev.extendedProps.tipus;
+                const esExcepcio = tipus === 'extra' || tipus === 'conserge' || ev.allDay;
+                const esSeleccionada = seleccionades.has(idInst) || seleccionades.has(idPare);
+                ev.setProp('display', esExcepcio || esSeleccionada ? 'auto' : 'none');
+            });
+        }
+
+        function actualitzarTot() {
+            const seleccionades = Array.from(document.querySelectorAll('.facility-checkbox:checked'));
             const container = document.getElementById('photo-container');
             const img = document.getElementById('inst-photo');
             const placeholder = document.getElementById('no-photo-placeholder');
             const label = document.getElementById('photo-name');
 
-            if (val === 'tots') {
+            // La foto es mostra quan s'ha triat una sola instal·lació.
+            if (seleccionades.length !== 1) {
                 container.style.display = 'none';
             } else {
+                const casella = seleccionades[0];
+                const nom = casella.closest('.facility-option').querySelector('span:last-of-type').textContent.trim();
+                const dataImg = casella.dataset.img;
                 container.style.display = 'block';
-                label.innerText = opt.text;
+                label.textContent = nom;
                 if (dataImg === 'none' || !dataImg) {
                     img.style.display = 'none';
                     placeholder.style.display = 'flex';
@@ -214,26 +227,9 @@
                 }
             }
 
-            // 2. FILTRE REAL (El que hem provat a la consola)
-            if (calendar) {
-                calendar.getEvents().forEach(ev => {
-                    const idInst = String(ev.extendedProps.id_inst || "");
-                    const idPare = String(ev.extendedProps.id_pare || "");
-                    const tipus = ev.extendedProps.tipus;
-
-                    // Condicions per mostrar:
-                    const esTots = (val === 'tots');
-                    const esCoincidencia = (idInst === val || idPare === val);
-                    const esExcepcio = (tipus === 'extra' || tipus === 'conserge' || ev.allDay);
-
-                    if (esTots || esCoincidencia || esExcepcio) {
-                        ev.setProp('display', 'auto'); // Torna a mostrar
-                    } else {
-                        ev.setProp('display', 'none'); // Amaga
-                    }
-                });
-            }
+            aplicarFiltreInstalacions();
         }
+
     </script>
 </body>
 </html>
