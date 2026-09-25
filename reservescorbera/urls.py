@@ -6,6 +6,8 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('login/', views.login_usuari, name='login'),
     path('inici/', views.inici, name='inici'),
+    path('activitats-extra/', views.activitats_extra, name='activitats_extra'),
+    path('activitats-extra/eliminar/<int:pk>/', views.eliminar_extra, name='eliminar_extra'),
     
     # Llistat d'instal·lacions
     path('calendari/', views.llistat_instalacions, name='calendari'),
