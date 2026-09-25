@@ -48,8 +48,8 @@
         .filter-box { width: 100%; }
         .facility-filter { border: 0; padding: 0; margin: 0; }
         .facility-filter legend { float: none; width: auto; margin-bottom: 12px; font-size: .9rem; font-weight: 700; }
-        .facility-list { display: flex; flex-direction: column; gap: 8px; max-height: 42vh; overflow-y: auto; padding-right: 4px; }
-        .facility-option { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: .88rem; }
+        .facility-list { display: flex; flex-direction: column; gap: 6px; max-height: calc(100vh - 250px); overflow-y: auto; padding-right: 4px; }
+        .facility-option { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: .88rem; }
         .facility-option:hover { background: #f8f8f8; }
         .facility-option input { order: 3; width: 12px; height: 12px; margin: 0 0 0 auto; accent-color: var(--primary); flex: 0 0 auto; }
         .facility-option span { line-height: 1.25; }
@@ -58,10 +58,11 @@
         .facility-option span:not(.facility-dot) { order: 2; }
 
         /* Contenidor de la Imatge (Protegit contra ValueError) */
+        /* Fotos i referències preservades per recol·locar-les més endavant; ara no ocupen espai lateral. */
         #photo-container {
             margin-top: auto; width: 100%; height: 200px;
             border-radius: 12px; overflow: hidden; background: #222;
-            display: none; border: 1px solid var(--border); position: relative;
+            display: none !important; border: 1px solid var(--border); position: relative;
         }
 
         #photo-container img { width: 100%; height: 100%; object-fit: cover; }
