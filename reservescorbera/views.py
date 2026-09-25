@@ -619,7 +619,7 @@ def llista_pendents(request):
 @login_required
 def pistes(request):
     # Només les que no tenen pare
-    instalacions = Instalacio.objects.filter(parent__isnull=True).order_by('nom')
+    instalacions = Instalacio.objects.filter(parent__isnull=True).exclude(nom__icontains='extraordin').order_by('nom')
     
     context = {
         'instalacions': instalacions,
