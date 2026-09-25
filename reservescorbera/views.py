@@ -37,11 +37,6 @@ def instancies(request):
 
 
 @login_required
-def sollicituds(request):
-    return render(request, 'reservescorbera/sollicituds.html')
-
-
-@login_required
 def inici(request):
     # 1. PROCESSAR ACCIONS DEL TÈCNIC (POST)
     if request.method == "POST" and request.user.is_staff:
