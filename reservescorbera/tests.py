@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.core import mail
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from .models import Instalacio, Reserva
@@ -86,3 +87,48 @@ class SoccerFieldAvailabilityTests(TestCase):
             ).values_list("nom", flat=True)
         )
         self.assertEqual(names, {"Camp 1 de futbol 7", "Camp 2 de futbol 7"})
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class ReservationCancellationOwnershipTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="basketball", email="basketball@example.test", password="secret"
+        )
+        self.other = User.objects.create_user(
+            username="football", email="football@example.test", password="secret"
+        )
+        self.facility = Instalacio.objects.create(nom="Pavelló")
+        start = timezone.now() + timedelta(days=1)
+        self.reservation = Reserva.objects.create(
+            instalacio=self.facility,
+            entitat=self.owner,
+            activitat="Entrenament",
+            inici=start,
+            final=start + timedelta(hours=1),
+            estat="pendent",
+        )
+
+    def test_owner_can_cancel_their_reservation(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            "/eliminar-reserva-entitat/", {"id": self.reservation.pk}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "ok")
+        self.assertFalse(Reserva.objects.filter(pk=self.reservation.pk).exists())
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_another_entity_cannot_cancel_the_reservation(self):
+        self.client.force_login(self.other)
+
+        response = self.client.post(
+            "/eliminar-reserva-entitat/", {"id": self.reservation.pk}
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["status"], "error")
+        self.assertTrue(Reserva.objects.filter(pk=self.reservation.pk).exists())
+        self.assertEqual(len(mail.outbox), 0)

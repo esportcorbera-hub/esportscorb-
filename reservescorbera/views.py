@@ -1019,12 +1019,16 @@ def meves_reserves(request):
         'totes_entitats': totes_entitats
     })
 
-@csrf_exempt # Per evitar l'error 403 que et sortia
 @login_required
+@require_POST
 def eliminar_reserva_entitat(request):
-    if request.method == "POST":
-        reserva_id = request.POST.get('id')
-        reserva = get_object_or_404(Reserva, id=reserva_id)
+    reserva_id = request.POST.get('id')
+    reserva = Reserva.objects.filter(id=reserva_id, entitat=request.user).first()
+    if reserva is None:
+        return JsonResponse(
+            {'status': 'error', 'message': 'Només pots anul·lar les teves reserves.'},
+            status=403,
+        )
         
         # 1. Guardem les dades abans d'esborrar
         inici_local = timezone.localtime(reserva.inici)
@@ -1070,7 +1074,6 @@ def eliminar_reserva_entitat(request):
         reserva.delete()
         return JsonResponse({'status': 'ok'})
 
-    return JsonResponse({'status': 'error'}, status=405)
 
 
 @staff_member_required
