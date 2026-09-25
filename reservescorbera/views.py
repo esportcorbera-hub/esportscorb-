@@ -912,7 +912,11 @@ def editar_plantilla(request, pk):
     
     if request.method == 'POST':
         item.dia_setmana = int(request.POST.get('dia_setmana'))
-        instalacio_nova = instalacions.get(pk=request.POST.get('instalacio'))
+        instalacio_nova = Instalacio.objects.filter(parent__isnull=True).exclude(
+            nom__icontains='personal esports'
+        ).exclude(
+            nom__icontains='extraordin'
+        ).get(pk=request.POST.get('instalacio'))
         item.instalacio = instalacio_nova
         item.user_id = request.POST.get('usuari')
         item.inici = request.POST.get('inici')
