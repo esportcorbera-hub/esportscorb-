@@ -23,7 +23,7 @@ from django.utils.dateparse import parse_datetime
 # 1. HOME PÚBLIC
 def home(request):
     # Canviem .all() per .filter(parent__isnull=True)
-    instalacions = Instalacio.objects.filter(parent__isnull=True).order_by('nom')
+    instalacions = Instalacio.objects.filter(parent__isnull=True).exclude(nom__icontains='personal esports').order_by('nom')
     
     context = {
         'instalacions': instalacions,
@@ -71,7 +71,7 @@ def inici(request):
 
     # 3. DADES GENERALS
     # Cerca aquesta línia dins de def inici(request):
-    instalacions = Instalacio.objects.filter(parent__isnull=True).order_by('nom')
+    instalacions = Instalacio.objects.filter(parent__isnull=True).exclude(nom__icontains='personal esports').order_by('nom')
     les_meves_reserves = Reserva.objects.filter(entitat=request.user).order_by('-inici')
 
     context = {
