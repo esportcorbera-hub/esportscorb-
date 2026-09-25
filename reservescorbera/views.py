@@ -1029,50 +1029,50 @@ def eliminar_reserva_entitat(request):
             {'status': 'error', 'message': 'Només pots anul·lar les teves reserves.'},
             status=403,
         )
-        
-        # 1. Guardem les dades abans d'esborrar
-        inici_local = timezone.localtime(reserva.inici)
-        final_local = timezone.localtime(reserva.final)
-        espai_nom = reserva.instalacio.nom
-        activitat_nom = reserva.activitat
-        
-        # 2. Busquem només els usuaris que TINGUIN correu
-        # Això evita que el sistema s'encalli si algú no en té
-        destinataris = list(User.objects.filter(
-            is_active=True
-        ).exclude(
-            Q(email='') | Q(email__isnull=True) # Exclou buits i nuls
-        ).values_list('email', flat=True))
+    
+    # 1. Guardem les dades abans d'esborrar
+    inici_local = timezone.localtime(reserva.inici)
+    final_local = timezone.localtime(reserva.final)
+    espai_nom = reserva.instalacio.nom
+    activitat_nom = reserva.activitat
+    
+    # 2. Busquem només els usuaris que TINGUIN correu
+    # Això evita que el sistema s'encalli si algú no en té
+    destinataris = list(User.objects.filter(
+        is_active=True
+    ).exclude(
+        Q(email='') | Q(email__isnull=True) # Exclou buits i nuls
+    ).values_list('email', flat=True))
 
-        if destinataris:
-            assumpte = f"📢 ANUL·LACIÓ: {espai_nom} - {activitat_nom}"
-            cos = (
-                f"Hola,\n\nEs comunica que la següent reserva ha estat ANUL·LADA i l'espai torna a estar disponible:\n\n"
-                f"📍 Espai: {espai_nom}\n"
-                f"📅 Data: {inici_local.strftime('%d/%m/%Y')}\n"
-                f"⏰ Hora: {inici_local.strftime('%H:%M')} - {final_local.strftime('%H:%M')}\n"
-                f"👤 Entitat que l'ha alliberat: {request.user.username}\n\n"
-                f"Aquest és un missatge automàtic enviat a les entitats amb correu registrat."
+    if destinataris:
+        assumpte = f"📢 ANUL·LACIÓ: {espai_nom} - {activitat_nom}"
+        cos = (
+            f"Hola,\n\nEs comunica que la següent reserva ha estat ANUL·LADA i l'espai torna a estar disponible:\n\n"
+            f"📍 Espai: {espai_nom}\n"
+            f"📅 Data: {inici_local.strftime('%d/%m/%Y')}\n"
+            f"⏰ Hora: {inici_local.strftime('%H:%M')} - {final_local.strftime('%H:%M')}\n"
+            f"👤 Entitat que l'ha alliberat: {request.user.username}\n\n"
+            f"Aquest és un missatge automàtic enviat a les entitats amb correu registrat."
+        )
+
+        try:
+            # Fem servir EmailMessage per poder fer servir BCC (Còpia oculta)
+            from django.core.mail import EmailMessage
+            email = EmailMessage(
+                subject=assumpte,
+                body=cos,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=['esportscorb@gmail.com'], # T'arriba a tu com a confirmació
+                bcc=destinataris,           # Arriba a tots els que sí que tenen mail
             )
+            email.send(fail_silently=False)
+        except Exception as e:
+            # Si falla l'enviament, ho registrem però deixem que la reserva s'esborri
+            print(f"Error enviant correu: {e}")
 
-            try:
-                # Fem servir EmailMessage per poder fer servir BCC (Còpia oculta)
-                from django.core.mail import EmailMessage
-                email = EmailMessage(
-                    subject=assumpte,
-                    body=cos,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=['esportscorb@gmail.com'], # T'arriba a tu com a confirmació
-                    bcc=destinataris,           # Arriba a tots els que sí que tenen mail
-                )
-                email.send(fail_silently=False)
-            except Exception as e:
-                # Si falla l'enviament, ho registrem però deixem que la reserva s'esborri
-                print(f"Error enviant correu: {e}")
-
-        # 3. Finalment esborrem la reserva de la base de dades
-        reserva.delete()
-        return JsonResponse({'status': 'ok'})
+    # 3. Finalment esborrem la reserva de la base de dades
+    reserva.delete()
+    return JsonResponse({'status': 'ok'})
 
 
 
