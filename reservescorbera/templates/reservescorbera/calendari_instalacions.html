@@ -78,6 +78,36 @@
                     <div class="inst-img-wrapper">
                         {% if inst.imatge %}
                             <img src="{{ inst.imatge.url }}" class="inst-img" alt="{{ inst.nom }}">
+                        {% elif inst.nom == 'Camp futbol' or inst.nom == 'Camp de Futbol' %}
+                            <img src="https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0249_vbmwmi" class="inst-img" alt="{{ inst.nom }}">
+                        {% elif inst.nom == 'Pista Cau de la guineu' or inst.nom == 'Cau de la Guineu' %}
+                            <img src="https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0241_bqtxum" class="inst-img" alt="{{ inst.nom }}">
+                        {% elif inst.nom == 'Gimnàs Balmes' %}
+                            <img src="https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0245_d1gmru" class="inst-img" alt="{{ inst.nom }}">
+                        {% elif inst.nom == 'Pavelló' %}
+                            <img src="https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0252_huhcow" class="inst-img" alt="{{ inst.nom }}">
+                        {% elif inst.nom == 'Pista atletisme' or inst.nom == 'Pista Atletisme' %}
+                            <img src="https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0250_xo2t7o" class="inst-img" alt="{{ inst.nom }}">
+                        {% elif inst.nom == 'Pista bàsquet Balmes' or inst.nom == 'Pista Bàsquet Balmes' %}
+                            <img src="https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0244_o2lu5z" class="inst-img" alt="{{ inst.nom }}">
+                        {% elif inst.nom == 'Pista futsal  Balmes' or inst.nom == 'Pista futsal Balmes' or inst.nom == 'Pista Futsal Balmes' %}
+                            <img src="https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0243_a5vpom" class="inst-img" alt="{{ inst.nom }}">
+                        {% elif inst.nom == 'Pista blanca' %}
+                            <img src="https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0246_dosnfc" class="inst-img" alt="{{ inst.nom }}">
+                        {% elif inst.nom == 'Pista verda' %}
+                            <img src="https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0247_oiqrwl" class="inst-img" alt="{{ inst.nom }}">
+                        {% elif inst.nom == "Pista Puig d'agulles" or inst.nom == "Puig d'Agulles" %}
+                            <img src="https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0240_z1caot" class="inst-img" alt="{{ inst.nom }}">
+                        {% elif inst.nom == 'Rocòdrom' %}
+                            <img src="https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0253_cqp0mo" class="inst-img" alt="{{ inst.nom }}">
+                        {% elif inst.nom == 'Sala cycling' or inst.nom == 'Sala Cycling' %}
+                            <img src="https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0248_if8jsh" class="inst-img" alt="{{ inst.nom }}">
+                        {% elif inst.nom == 'Sala sota grades' or inst.nom == 'Sala Grades' %}
+                            <img src="https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0254_kf7lb5" class="inst-img" alt="{{ inst.nom }}">
+                        {% elif inst.nom == 'Sala pavelló' or inst.nom == 'Sala Pavelló' %}
+                            <img src="https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0251_etqqvk" class="inst-img" alt="{{ inst.nom }}">
+                        {% elif inst.nom == 'Trial bike' or inst.nom == 'Trial Bike' %}
+                            <img src="https://res.cloudinary.com/ds35ja96l/image/upload/f_auto,q_auto,w_900/v1/instalacions/DSC_0242_qenuxj" class="inst-img" alt="{{ inst.nom }}">
                         {% else %}
                             <i class="bi bi-building-fill text-muted fs-1"></i>
                         {% endif %}
