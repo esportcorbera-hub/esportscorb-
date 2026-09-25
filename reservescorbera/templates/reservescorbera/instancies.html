@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Instàncies - Esports Corbera</title>
+    <title>Instàncies i documents - Esports Corbera</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
@@ -34,8 +34,8 @@
 </nav>
 <main class="page-wrap">
     <p class="eyebrow mb-2">Ajuntament de Corbera de Llobregat</p>
-    <h1 class="page-title display-5 mb-2">Instàncies</h1>
-    <p class="text-secondary mb-4">Accés als formularis electrònics per a les entitats esportives.</p>
+    <h1 class="page-title display-5 mb-2">Instàncies i documents</h1>
+    <p class="text-secondary mb-4">Formularis electrònics i documents municipals per a les entitats esportives.</p>
     <div class="row g-4">
         <div class="col-md-6">
             <article class="instancia-card">
@@ -54,6 +54,15 @@
             </article>
         </div>
     </div>
+    <section class="mt-5">
+        <p class="eyebrow mb-2">Subvencions esportives</p>
+        <h2 class="fw-bold mb-3">Documents subvenció concurrència competitiva</h2>
+        <div class="row g-3">
+            <div class="col-md-4"><article class="instancia-card"><div class="instancia-icon" aria-hidden="true"><i class="bi bi-file-earmark-text"></i></div><h2>Sol·licitud de subvenció d’esports</h2><p>Formulari editable per presentar la sol·licitud.</p><div class="d-flex flex-wrap gap-2"><a class="btn-app" href="{% static 'documents/subvencio-sollicitud.pdf' %}" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right"></i> OBRIR</a><a class="btn-app" href="{% static 'documents/subvencio-sollicitud.pdf' %}" download><i class="bi bi-download"></i> DESCARREGAR</a></div></article></div>
+            <div class="col-md-4"><article class="instancia-card"><div class="instancia-icon" aria-hidden="true"><i class="bi bi-file-earmark-text"></i></div><h2>Documentació tècnica de subvenció</h2><p>Formulari editable de documentació tècnica.</p><div class="d-flex flex-wrap gap-2"><a class="btn-app" href="{% static 'documents/subvencio-documentacio-tecnica.pdf' %}" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right"></i> OBRIR</a><a class="btn-app" href="{% static 'documents/subvencio-documentacio-tecnica.pdf' %}" download><i class="bi bi-download"></i> DESCARREGAR</a></div></article></div>
+            <div class="col-md-4"><article class="instancia-card"><div class="instancia-icon" aria-hidden="true"><i class="bi bi-file-earmark-person"></i></div><h2>Certificat de representació</h2><p>Formulari editable de certificat de representació.</p><div class="d-flex flex-wrap gap-2"><a class="btn-app" href="{% static 'documents/subvencio-certificat-representacio.pdf' %}" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right"></i> OBRIR</a><a class="btn-app" href="{% static 'documents/subvencio-certificat-representacio.pdf' %}" download><i class="bi bi-download"></i> DESCARREGAR</a></div></article></div>
+        </div>
+    </section>
 </main>
 </body>
 </html>
