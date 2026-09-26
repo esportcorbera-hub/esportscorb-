@@ -136,6 +136,49 @@
             color: var(--primary);
         }
     </style>
+
+<style id="responsive-layout">
+/* Adaptació de la mateixa interfície a mòbil, tauleta i ordinador. */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { max-width: 100%; }
+img, video, iframe { max-width: 100%; }
+input, select, textarea, button { max-width: 100%; }
+.table-responsive { max-width: 100%; }
+@media (max-width: 991.98px) {
+  .main-layout { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { min-width: 0; }
+  .calendar-area { min-width: 0; }
+  .navbar .container, .navbar .container-fluid { flex-wrap: wrap; gap: 10px; }
+  .custom-select { max-width: 100%; }
+}
+@media (max-width: 767.98px) {
+  body { overflow-x: hidden; }
+  #top-bar, .navbar-custom { padding-left: 14px !important; padding-right: 14px !important; }
+  #top-bar { gap: 10px; flex-wrap: wrap; }
+  #top-bar h1 { font-size: 1rem; }
+  .user-nav { gap: 8px; flex-wrap: wrap; }
+  .action-bar { padding: 12px 14px; gap: 8px; }
+  .action-bar > * { max-width: 100%; }
+  .custom-select { width: 100% !important; }
+  .calendar-area { padding: 14px !important; }
+  #calendar { min-width: 0; max-width: 100%; overflow-x: auto; }
+  #calendar .fc { min-width: 620px; }
+  .login-card { width: min(340px, calc(100% - 28px)); padding: 28px 22px; }
+  .container-fluid, .container { max-width: 100%; }
+  .container-fluid.px-5 { padding-left: 14px !important; padding-right: 14px !important; }
+  .header-section { padding: 72px 14px 28px !important; }
+  .btn-tornar { left: 12px !important; top: 12px !important; }
+  .calendar-container { overflow-x: auto !important; }
+  .calendar-header-row, .calendar-body-row { min-width: 700px; }
+  .empty-state { padding: 28px 18px; }
+  .modal-dialog { margin: 12px; }
+}
+@media (min-width: 768px) and (max-width: 1199.98px) {
+  .container-fluid.px-5 { padding-left: 24px !important; padding-right: 24px !important; }
+  .calendar-area { padding: 22px; }
+}
+</style>
+
 </head>
 <body>
 
