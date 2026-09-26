@@ -22,8 +22,10 @@
             font-family: 'Segoe UI', sans-serif; 
             background: var(--bg); 
             margin: 0; 
-            overflow: visible; 
-            height: 100vh; 
+            overflow-x: hidden;
+            overflow-y: auto;
+            min-height: 100vh;
+            height: auto;
             display: flex;
             flex-direction: column;
         }
@@ -110,12 +112,12 @@
         .container-fluid { 
             flex-grow: 1; 
             padding: 10px 15px 0px 15px; 
-            overflow: hidden; 
+            overflow: visible;
             display: flex;
             flex-direction: column;
         }
 
-        .row.g-4 { flex: 1; height: auto; margin-bottom: 0;}
+        .row.g-4 { flex: 0 0 auto; height: auto; margin-bottom: 0;}
 
         /* CALENDARI: S'ajusta sol */
         #calendar { 
@@ -123,8 +125,8 @@
             padding: 10px; 
             border-radius: 12px 12px 0 0; 
             box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-            flex: 1 1 auto;
-            height: 100%;
+            flex: 0 0 auto;
+            height: auto;
             min-height: 0; 
         }
 
@@ -397,8 +399,9 @@
                 },
 
                 firstDay: 1,
-                height: 650,
-                expandRows: true,
+                height: 'auto',
+                expandRows: false,
+                scrollTime: '07:00:00',
                 headerToolbar: { 
                     left: 'prev,next today', 
                     center: 'title', 
