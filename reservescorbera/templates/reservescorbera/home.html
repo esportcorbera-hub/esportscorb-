@@ -80,7 +80,7 @@
 
         /* Àrea del Calendari */
         .calendar-area { padding: 30px; background: #fff; }
-        #calendar { height: 100%; }
+        #calendar { height: auto; }
 
         @media (max-width: 900px) {
             .main-layout { grid-template-columns: 1fr; }
@@ -143,9 +143,9 @@
                 initialView: 'timeGridWeek',
                 locale: 'ca',
                 firstDay: 1,
-                height: '100%',
+                height: 'auto',
                 allDaySlot: false,
-                slotMinTime: '00:00:00',
+                slotMinTime: '08:00:00',
                 slotMaxTime: '24:00:00',
                 scrollTime: '08:00:00',
                 headerToolbar: { 
