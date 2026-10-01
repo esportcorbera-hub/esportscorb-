@@ -387,6 +387,7 @@ input, select, textarea, button { max-width: 100%; }
                 
                 // Permet clicar i arrossegar per crear-ne de noves
                 selectable: esTecnic,
+                selectOverlap: esTecnic,
                 selectMirror: esTecnic,
 
                 // Evitem que les reserves rebotin en moure-les fora de l'horari (si ets tècnic)
@@ -523,6 +524,13 @@ input, select, textarea, button { max-width: 100%; }
                         title: 'NOVA ACTIVITAT',
                         html: `
                             <div class="text-start">
+                                <label class="small fw-bold">Entitat:</label>
+                                <select id="swal-entitat" class="form-select mb-3" required>
+                                    <option value="">Selecciona una entitat</option>
+                                    {% for entitat in entitats %}
+                                    <option value="{{ entitat.id }}">{{ entitat.first_name|default:entitat.username }}</option>
+                                    {% endfor %}
+                                </select>
                                 <label class="small fw-bold">Nom de l'activitat:</label>
                                 <input id="swal-nou-titol" class="form-control mb-3">
                                 <label class="small fw-bold">Tipus:</label>
@@ -536,13 +544,16 @@ input, select, textarea, button { max-width: 100%; }
                         confirmButtonText: 'Crear',
                         preConfirm: () => {
                             const titol = document.getElementById('swal-nou-titol').value;
+                            const entitatId = document.getElementById('swal-entitat').value;
+                            if (!entitatId) return Swal.showValidationMessage('Selecciona una entitat');
                             if (!titol) return Swal.showValidationMessage('Escriu un nom');
-                            return { titol, tipus: document.getElementById('swal-nou-tipus').value };
+                            return { titol, entitat_id: document.getElementById('swal-entitat').value, tipus: document.getElementById('swal-nou-tipus').value };
                         }
                     }).then((result) => {
                         if (result.isConfirmed) {
                             enviarAccioReserva(null, 'crear', {
                                 titol: result.value.titol,
+                                entitat_id: result.value.entitat_id,
                                 tipus: result.value.tipus,
                                 inici: info.startStr,
                                 final: info.endStr,
