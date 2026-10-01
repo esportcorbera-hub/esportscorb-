@@ -139,63 +139,78 @@ def fer_reserva(request, instalacio_id):
         dt_inici = timezone.make_aware(datetime.strptime(f"{dia} {hora_inici}", "%Y-%m-%d %H:%M"))
         dt_fi = timezone.make_aware(datetime.strptime(f"{dia} {hora_fi}", "%Y-%m-%d %H:%M"))
 
-        # 1. PROTECCIÓ ANTI-DUPLICATS
-        if Reserva.objects.filter(entitat=request.user, instalacio=instalacio, inici=dt_inici, final=dt_fi).exists():
-            return redirect('inici')
+        es_tecnic = request.user.is_staff and not request.user.groups.filter(name='Conserge').exists()
+        entitat_reserva = request.user
+        if es_tecnic:
+            entitat_reserva = User.objects.filter(
+                pk=request.GET.get('entitat_id'), is_active=True, is_staff=False, is_superuser=False
+            ).first()
+            if not entitat_reserva:
+                messages.error(request, 'Selecciona una entitat vàlida.')
+                return redirect('calendari_instalacions')
 
-        # 2. VALIDACIÓ DE SOLAPAMENT JERÀRQUIC (Pare i Fills)
-        # Recollim tots els IDs que poden entrar en conflicte:
-        # - La mateixa instal·lació
-        # - El seu pare (si estem reservant una sub-zona)
-        # - Els seus fills (si estem reservant l'espai sencer)
-        ids_en_conflicte = [instalacio.id]
-        
-        if instalacio.parent:
-            ids_en_conflicte.append(instalacio.parent.id)
-            
-        fills_ids = list(instalacio.sub_espais.values_list('id', flat=True))
-        ids_en_conflicte.extend(fills_ids)
+        if not es_tecnic:
+            # 1. PROTECCIÓ ANTI-DUPLICATS
+            if Reserva.objects.filter(entitat=request.user, instalacio=instalacio, inici=dt_inici, final=dt_fi).exists():
+                return redirect('inici')
 
-        # Mirem si hi ha alguna reserva en qualsevol d'aquests IDs
-        solapament = Reserva.objects.filter(
-            instalacio_id__in=ids_en_conflicte,
-            estat__in=['pendent', 'validada']
-        ).filter(
-            Q(inici__lt=dt_fi, final__gt=dt_inici)
-        ).exists()
+            # 2. VALIDACIÓ DE SOLAPAMENT JERÀRQUIC (Pare i Fills)
+            # Recollim tots els IDs que poden entrar en conflicte:
+            # - La mateixa instal·lació
+            # - El seu pare (si estem reservant una sub-zona)
+            # - Els seus fills (si estem reservant l'espai sencer)
+            ids_en_conflicte = [instalacio.id]
 
-        if solapament:
-            messages.error(request, "Aquesta franja està ocupada (pot ser per l'espai sencer o una sub-zona).")
-            return redirect('calendari_instalacions')
+            if instalacio.parent:
+                ids_en_conflicte.append(instalacio.parent.id)
+
+            fills_ids = list(instalacio.sub_espais.values_list('id', flat=True))
+            ids_en_conflicte.extend(fills_ids)
+
+            # Mirem si hi ha alguna reserva en qualsevol d'aquests IDs
+            solapament = Reserva.objects.filter(
+                instalacio_id__in=ids_en_conflicte,
+                estat__in=['pendent', 'validada']
+            ).filter(
+                Q(inici__lt=dt_fi, final__gt=dt_inici)
+            ).exists()
+
+            if solapament:
+                messages.error(request, "Aquesta franja està ocupada (pot ser per l'espai sencer o una sub-zona).")
+                return redirect('calendari_instalacions')
 
         # 3. CREACIÓ DE LA RESERVA
-        nom_usuari = request.user.username.upper()
+        nom_usuari = entitat_reserva.username.upper()
         titol_visible = f"{nom_usuari}: {nom_activitat}"
 
         Reserva.objects.create(
-            entitat=request.user,
+            entitat=entitat_reserva,
             instalacio=instalacio,
             activitat=titol_visible,
             inici=dt_inici,
             final=dt_fi,
-            estat='pendent'
+            estat='validada' if es_tecnic else 'pendent'
         )
         
-        # --- ENVIAMENT DE MAIL AL GRUP 'Tècnic' ---
-        tecnics_emails = User.objects.filter(
-            groups__name='Tècnic', 
-            is_active=True
-        ).exclude(email='').values_list('email', flat=True)
+        if not es_tecnic:
+            # --- ENVIAMENT DE MAIL AL GRUP 'Tècnic' ---
+            tecnics_emails = User.objects.filter(
+                groups__name='Tècnic', 
+                is_active=True
+            ).exclude(email='').values_list('email', flat=True)
 
-        if tecnics_emails:
-            assumpte = f"Nova sol·licitud de reserva: {instalacio.nom}"
-            missatge = f"Hola,\n\nL'entitat {nom_usuari} ha reservat {instalacio.nom} per al dia {dt_inici.strftime('%d/%m/%Y')} de {hora_inici} a {hora_fi}.\n\nValida-la al panell de gestió."
-            try:
-                send_mail(assumpte, missatge, settings.DEFAULT_FROM_EMAIL, list(tecnics_emails), fail_silently=True)
-            except Exception:
-                pass
-        
-        messages.success(request, "Sol·licitud enviada correctament!")
+            if tecnics_emails:
+                assumpte = f"Nova sol·licitud de reserva: {instalacio.nom}"
+                missatge = f"Hola,\n\nL'entitat {nom_usuari} ha reservat {instalacio.nom} per al dia {dt_inici.strftime('%d/%m/%Y')} de {hora_inici} a {hora_fi}.\n\nValida-la al panell de gestió."
+                try:
+                    send_mail(assumpte, missatge, settings.DEFAULT_FROM_EMAIL, list(tecnics_emails), fail_silently=True)
+                except Exception:
+                    pass
+
+        if es_tecnic:
+            messages.success(request, f"Reserva creada per a {entitat_reserva.username}.")
+        else:
+            messages.success(request, "Sol·licitud enviada correctament!")
         return redirect('inici')
 
     except Exception as e:
@@ -625,12 +640,14 @@ def llista_pendents(request):
 
 @login_required
 def pistes(request):
-    # Només les que no tenen pare
+    es_tecnic = request.user.is_staff and not request.user.groups.filter(name='Conserge').exists()
     instalacions = Instalacio.objects.filter(parent__isnull=True).exclude(nom__icontains='extraordin').exclude(nom__icontains='personal esports').order_by('nom')
     
     context = {
         'instalacions': instalacions,
-        'avui': timezone.now().date()
+        'avui': timezone.now().date(),
+        'es_tecnic': es_tecnic,
+        'entitats': User.objects.filter(is_active=True, is_staff=False, is_superuser=False).order_by('first_name', 'username') if es_tecnic else []
     }
     return render(request, 'reservescorbera/calendari_instalacions.html', context)
 
