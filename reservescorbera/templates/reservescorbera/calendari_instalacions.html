@@ -224,6 +224,18 @@ input, select, textarea, button { max-width: 100%; }
                         <select id="selectSubEspai" class="form-select" onchange="canviarPista()"></select>
                     </div>
 
+                    {% if es_tecnic %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">ENTITAT:</label>
+                        <select id="selectEntitat" class="form-select" onchange="validarSeleccio()">
+                            <option value="">Selecciona una entitat</option>
+                            {% for entitat in entitats %}
+                            <option value="{{ entitat.id }}">{{ entitat.first_name|default:entitat.username }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
                     <div class="mb-3">
                         <label class="form-label fw-bold small">NOM DE L'ACTIVITAT:</label>
                         <input type="text" id="nomActivitat" class="form-control" onkeyup="validarSeleccio()">
@@ -263,6 +275,7 @@ input, select, textarea, button { max-width: 100%; }
         let obertDiumenge = false, hObertDiumenge = "", hTancamentDiumenge = "";
         
         let horesOcupadesActuals = [];
+        const esTecnic = {{ es_tecnic|yesno:"true,false" }};
 
         document.addEventListener('DOMContentLoaded', () => {
             modalObj = new bootstrap.Modal(document.getElementById('modalReserva'));
@@ -286,6 +299,7 @@ input, select, textarea, button { max-width: 100%; }
 
             document.getElementById('nomInstalacioModal').innerText = nom;
             document.getElementById('nomActivitat').value = '';
+            if (esTecnic) document.getElementById('selectEntitat').value = '';
             document.getElementById('dataReserva').value = '';
             document.getElementById('seccioHores').style.display = 'none';
             document.getElementById('infoTancat').style.display = 'none';
@@ -333,8 +347,12 @@ input, select, textarea, button { max-width: 100%; }
             }
 
             document.getElementById('infoTancat').style.display = 'none';
-            const resp = await fetch(`/api/hores-ocupades/?instalacio=${idActual}&data=${dataInput}&t=${Date.now()}`);
-            horesOcupadesActuals = await resp.json();
+            if (esTecnic) {
+                horesOcupadesActuals = [];
+            } else {
+                const resp = await fetch(`/api/hores-ocupades/?instalacio=${idActual}&data=${dataInput}&t=${Date.now()}`);
+                horesOcupadesActuals = await resp.json();
+            }
             
             document.getElementById('seccioHores').style.display = 'block';
             poblarSelects(tipusDia);
@@ -388,7 +406,8 @@ input, select, textarea, button { max-width: 100%; }
             const n = document.getElementById('nomActivitat').value.trim();
             const i = document.getElementById('selectInici').value;
             const f = document.getElementById('selectFinal').value;
-            document.getElementById('btnFinalitzar').disabled = !(n.length > 2 && i && f);
+            const entitatValida = !esTecnic || document.getElementById('selectEntitat').value;
+            document.getElementById('btnFinalitzar').disabled = !(n.length > 2 && i && f && entitatValida);
         }
 
         function enviarReserva() {
@@ -396,7 +415,9 @@ input, select, textarea, button { max-width: 100%; }
             const d = document.getElementById('dataReserva').value;
             const i = document.getElementById('selectInici').value;
             const f = document.getElementById('selectFinal').value;
-            window.location.href = `/reserva/${idActual}/?data=${d}&hora_inici=${i}&hora_fi=${f}&nom_activitat=${n}`;
+            const params = new URLSearchParams({data: d, hora_inici: i, hora_fi: f, nom_activitat: document.getElementById('nomActivitat').value});
+            if (esTecnic) params.set('entitat_id', document.getElementById('selectEntitat').value);
+            window.location.href = `/reserva/${idActual}/?${params.toString()}`;
         }
         
         function canviarPista() {
