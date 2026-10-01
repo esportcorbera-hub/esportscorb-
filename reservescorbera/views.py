@@ -56,6 +56,7 @@ def inici(request):
     # 2. DADES PER AL TÈCNIC / CONSERGE
     pendents = []
     num_pendents = 0
+    entitats = User.objects.filter(is_active=True, is_staff=False).order_by('first_name', 'username') if request.user.is_staff else []
     conserges = [] # Llista buida per defecte
     
     if request.user.is_staff:
@@ -85,6 +86,7 @@ def inici(request):
         'pendents': pendents,
         'num_pendents': num_pendents,
         'conserges': conserges,  # <--- ARA SÍ: Arribarà al JS del SweetAlert
+        'entitats': entitats,
         'es_tecnic': request.user.is_staff
     }
     
@@ -653,15 +655,23 @@ def accio_reserva(request):
         # Busquem la instal·lació real
         instalacio_real = Instalacio.objects.filter(id=instalacio_id).first()
         
+        entitat_reserva = request.user
+        if accio == 'crear':
+            entitat_id = request.POST.get('entitat_id')
+            entitat_reserva = User.objects.filter(id=entitat_id, is_active=True, is_staff=False).first()
+            if not entitat_reserva:
+                return JsonResponse({'status': 'error', 'message': 'Selecciona una entitat vàlida'}, status=400)
+
         if not instalacio_real:
             return JsonResponse({'status': 'error', 'message': 'Instal·lació no trobada'})
         
+        activitat_reserva = f"{entitat_reserva.first_name or entitat_reserva.username}: {titol}" if accio == 'crear' else titol
         nova_reserva = Reserva.objects.create(
-            activitat=titol,
+            activitat=activitat_reserva,
             inici=inici,
             final=final,
             instalacio=instalacio_real,
-            entitat=request.user,
+            entitat=entitat_reserva,
             estat='validada' # Les del tècnic ja neixen confirmades
         )
         
