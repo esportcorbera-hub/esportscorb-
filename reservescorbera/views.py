@@ -775,58 +775,57 @@ def aplicar_plantilla_al_calendari(request):
     if request.user.is_staff:
         from .models import PlantillaReserva, Reserva
         from django.utils import timezone
-        
-        # 1. Intentem capturar la data de qualsevol d'aquestes dues variables
-        data_str = request.GET.get('data_inici') or request.GET.get('data_dilluns')
-        
-        # Aquest print t'ha de sortir amb la data ara sí!
-        print(f"\n---> DATA DETECTADA: {data_str}\n")
-        
-        if data_str:
-            try:
-                dia_referencia = datetime.strptime(data_str, '%Y-%m-%d').date()
-            except ValueError:
-                dia_referencia = timezone.now().date()
-        else:
-            dia_referencia = timezone.now().date()
 
-        # 2. CALCULEM EL DILLUNS (Això és el que mou les reserves de lloc)
-        dilluns_setmana = dia_referencia - timedelta(days=dia_referencia.weekday())
-        
+        data_inici_str = request.GET.get('data_inici') or request.GET.get('data_dilluns')
+        data_fi_str = request.GET.get('data_fi')
+
+        try:
+            data_inici = datetime.strptime(data_inici_str, '%Y-%m-%d').date() if data_inici_str else timezone.now().date()
+            data_fi = datetime.strptime(data_fi_str, '%Y-%m-%d').date() if data_fi_str else data_inici + timedelta(days=6 - data_inici.weekday())
+        except ValueError:
+            messages.error(request, "Les dates del període no són vàlides.")
+            return redirect('inici')
+
+        if data_fi < data_inici:
+            messages.error(request, "La data final no pot ser anterior a la data inicial.")
+            return redirect('inici')
+
         plantilla = PlantillaReserva.objects.exclude(
             instalacio__nom__icontains='personal esports'
         ).exclude(
             instalacio__nom__icontains='extraordin'
         )
         creades = 0
-        
-        for item in plantilla:
-            # IMPORTANT: Fem servir 'dilluns_setmana' per calcular el dia exacte
-            data_reserva = dilluns_setmana + timedelta(days=item.dia_setmana)
-            
-            dt_inici = timezone.make_aware(datetime.combine(data_reserva, item.inici))
-            dt_final = timezone.make_aware(datetime.combine(data_reserva, item.final))
 
-            hi_ha_solapament = Reserva.objects.filter(
-                instalacio=item.instalacio,
-                inici__lt=dt_final,
-                final__gt=dt_inici
-            ).exclude(estat='rebutjada').exists()
+        for dies_des_de_l_inici in range((data_fi - data_inici).days + 1):
+            data_reserva = data_inici + timedelta(days=dies_des_de_l_inici)
+            for item in plantilla:
+                if item.dia_setmana != data_reserva.weekday():
+                    continue
 
-            if not hi_ha_solapament:
-                nom_usuari = item.user.username.upper()
-                Reserva.objects.create(
-                    entitat=item.user,
+                dt_inici = timezone.make_aware(datetime.combine(data_reserva, item.inici))
+                dt_final = timezone.make_aware(datetime.combine(data_reserva, item.final))
+
+                hi_ha_solapament = Reserva.objects.filter(
                     instalacio=item.instalacio,
-                    inici=dt_inici,
-                    final=dt_final,
-                    activitat=f"{nom_usuari}: {item.activitat}",
-                    estat='validada'
-                )
-                creades += 1
-            
-        messages.success(request, f"✨ Plantilla aplicada a la setmana del {dilluns_setmana.strftime('%d/%m/%Y')}")
-    
+                    inici__lt=dt_final,
+                    final__gt=dt_inici
+                ).exclude(estat='rebutjada').exists()
+
+                if not hi_ha_solapament:
+                    nom_usuari = item.user.username.upper()
+                    Reserva.objects.create(
+                        entitat=item.user,
+                        instalacio=item.instalacio,
+                        inici=dt_inici,
+                        final=dt_final,
+                        activitat=f"{nom_usuari}: {item.activitat}",
+                        estat='validada'
+                    )
+                    creades += 1
+
+        messages.success(request, f"✨ Plantilla aplicada del {data_inici.strftime('%d/%m/%Y')} al {data_fi.strftime('%d/%m/%Y')}")
+
     return redirect('inici')
 @login_required
 def gestio_plantilla(request):
