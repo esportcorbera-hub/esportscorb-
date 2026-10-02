@@ -1045,8 +1045,9 @@ def eliminar_reserva_entitat(request):
         reserva_id = request.POST.get('id')
         reserva = get_object_or_404(Reserva, id=reserva_id)
 
-        # Només una entitat pot anul·lar reserves associades al seu usuari.
-        if request.user.is_staff or reserva.entitat_id != request.user.id:
+        # El tècnic pot anul·lar qualsevol reserva; la resta només les del seu usuari.
+        es_tecnic = request.user.is_staff and not request.user.groups.filter(name='Conserge').exists()
+        if not es_tecnic and reserva.entitat_id != request.user.id:
             return JsonResponse({'status': 'error', 'message': 'Només pots anul·lar les teves pròpies reserves.'}, status=403)
         
         # 1. Guardem les dades abans d'esborrar
