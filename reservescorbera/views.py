@@ -1044,6 +1044,10 @@ def eliminar_reserva_entitat(request):
     if request.method == "POST":
         reserva_id = request.POST.get('id')
         reserva = get_object_or_404(Reserva, id=reserva_id)
+
+        # Només una entitat pot anul·lar reserves associades al seu usuari.
+        if request.user.is_staff or reserva.entitat_id != request.user.id:
+            return JsonResponse({'status': 'error', 'message': 'Només pots anul·lar les teves pròpies reserves.'}, status=403)
         
         # 1. Guardem les dades abans d'esborrar
         inici_local = timezone.localtime(reserva.inici)
