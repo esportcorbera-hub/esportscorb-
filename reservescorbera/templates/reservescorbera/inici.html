@@ -774,33 +774,54 @@ input, select, textarea, button { max-width: 100%; }
 
 <script>
     function confirmarAplicarPlantilla() {
-        // Fem servir la variable 'calendar' que ja tens declarada a la línia 154
         if (typeof calendar !== 'undefined' && calendar.view) {
-            
-            // Això llegeix la setmana que l'usuari està mirant actualment
-            let dataInici = calendar.view.activeStart;
-            
-            let y = dataInici.getFullYear();
-            let m = ("0" + (dataInici.getMonth() + 1)).slice(-2);
-            let d = ("0" + dataInici.getDate()).slice(-2);
-            let dataStr = `${y}-${m}-${d}`;
+            const formatDate = (date) => {
+                const y = date.getFullYear();
+                const m = ("0" + (date.getMonth() + 1)).slice(-2);
+                const d = ("0" + date.getDate()).slice(-2);
+                return y + "-" + m + "-" + d;
+            };
+            const dataInicialCalendari = calendar.view.activeStart;
+            const dataFinalCalendari = new Date(dataInicialCalendari);
+            dataFinalCalendari.setDate(dataFinalCalendari.getDate() + 6);
 
             Swal.fire({
-                title: 'Aplicar Plantilla?',
-                html: `Vols copiar la plantilla a la setmana del:<br><b style="color: #d4af37; font-size: 1.2rem;">${dataStr}</b>`,
+                title: 'Aplicar plantilla d’entrenaments fixes',
+                html: "Selecciona el període en què vols enganxar la plantilla:" +
+                    '<div class="text-start mt-3">' +
+                    '<label for="plantilla-data-inici" class="small fw-bold">Data d’inici:</label>' +
+                    '<input id="plantilla-data-inici" type="date" class="form-control mb-3" value="' + formatDate(dataInicialCalendari) + '" required>' +
+                    '<label for="plantilla-data-fi" class="small fw-bold">Data final:</label>' +
+                    '<input id="plantilla-data-fi" type="date" class="form-control" value="' + formatDate(dataFinalCalendari) + '" required></div>',
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonText: 'SÍ, APLICA',
                 cancelButtonText: 'CANCEL·LAR',
-                confirmButtonColor: '#198754'
+                confirmButtonColor: '#198754',
+                preConfirm: () => {
+                    const dataInici = document.getElementById('plantilla-data-inici').value;
+                    const dataFi = document.getElementById('plantilla-data-fi').value;
+                    if (!dataInici || !dataFi) {
+                        Swal.showValidationMessage('Selecciona les dues dates.');
+                        return false;
+                    }
+                    if (dataFi < dataInici) {
+                        Swal.showValidationMessage('La data final no pot ser anterior a la data inicial.');
+                        return false;
+                    }
+                    return { dataInici, dataFi };
+                }
             }).then((result) => {
                 if (result.isConfirmed) {
-                    window.location.href = "/aplicar-plantilla/?data_inici=" + dataStr;
+                    const params = new URLSearchParams({
+                        data_inici: result.value.dataInici,
+                        data_fi: result.value.dataFi
+                    });
+                    window.location.href = "/aplicar-plantilla/?" + params.toString();
                 }
             });
         } else {
-            // Si el calendari falla, almenys que avisi i no es quedi "mort"
-            alert("Error: El calendari no s'ha trobat. Recarrega la pàgina.");
+            alert("Error: El calendari no s’ha trobat. Recarrega la pàgina.");
         }
     }
 </script>
