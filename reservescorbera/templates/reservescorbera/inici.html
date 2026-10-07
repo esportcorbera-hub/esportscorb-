@@ -138,6 +138,38 @@
 
         .card-noti { border: none; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); background: white; }
     </style>
+<style id="space-filter-calendar-density">
+.space-filter { position: relative; min-width: 220px; max-width: min(420px, 70vw); }
+.space-filter > summary {
+    cursor: pointer; list-style: none; background: #fff; border: 1px solid #ced4da;
+    border-radius: 6px; padding: 7px 34px 7px 12px; position: relative; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; font-size: .9rem;
+}
+.space-filter > summary::-webkit-details-marker { display: none; }
+.space-filter > summary::after { content: "▾"; position: absolute; right: 12px; }
+.space-filter-list {
+    position: absolute; top: calc(100% + 4px); right: 0; z-index: 1100; width: min(360px, calc(100vw - 24px));
+    max-height: min(55vh, 420px); overflow-y: auto; padding: 8px; background: #fff;
+    border: 1px solid #ced4da; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.16);
+}
+.space-filter-option { display: flex; align-items: flex-start; gap: 9px; padding: 7px 6px; cursor: pointer; }
+.space-filter-option input { margin-top: 4px; flex: 0 0 auto; }
+.space-filter-option span { overflow-wrap: anywhere; }
+#calendar.calendar-density-1 { --fc-event-font-size: .82rem; --fc-event-padding: 2px 4px; }
+#calendar.calendar-density-2 { --fc-event-font-size: .74rem; --fc-event-padding: 1px 3px; }
+#calendar.calendar-density-3plus { --fc-event-font-size: .66rem; --fc-event-padding: 0 2px; }
+#calendar[class*="calendar-density-"] .fc-timegrid-event { padding: var(--fc-event-padding); }
+#calendar[class*="calendar-density-"] .fc-event-title,
+#calendar[class*="calendar-density-"] .fc-event-time,
+#calendar[class*="calendar-density-"] .fc-daygrid-event { font-size: var(--fc-event-font-size); line-height: 1.1; }
+@media (max-width: 767.98px) {
+    .space-filter { min-width: 0; max-width: calc(100vw - 150px); }
+    .space-filter-list { right: auto; left: 0; }
+    #calendar.calendar-density-2 { --fc-event-font-size: .68rem; }
+    #calendar.calendar-density-3plus { --fc-event-font-size: .58rem; }
+}
+</style>
+
 
 <style id="responsive-layout">
 /* Adaptació de la mateixa interfície a mòbil, tauleta i ordinador. */
@@ -270,12 +302,17 @@ input, select, textarea, button { max-width: 100%; }
             </a>
             <div class="d-flex align-items-center gap-2">
                 <span style="font-weight: 700; font-size: 0.8rem; color: #555; text-transform: uppercase;">Filtre:</span>
-                <select id="selector-instalacio" class="form-select" onchange="filtrarPerDesplegable(this.value)">
-                    <option value="tots">Totes les instal·lacions</option>
-                    {% for inst in instalacions %}
-                        <option value="{{ inst.id }}">{{ inst.nom }}</option>
-                    {% endfor %}
-                </select>
+                <details class="space-filter">
+                    <summary id="selector-instalacio">Totes les instal·lacions</summary>
+                    <div class="space-filter-list" data-total-espais="{{ instalacions|length }}">
+                        {% for inst in instalacions %}
+                        <label class="space-filter-option">
+                            <input type="checkbox" class="space-filter-checkbox" value="{{ inst.id }}" onchange="filtrarPerDesplegable()">
+                            <span>{{ inst.nom }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </details>
             </div>
 
             {% if user.is_staff and not user.groups.all.0.name == "Conserge" %}
@@ -507,18 +544,18 @@ input, select, textarea, button { max-width: 100%; }
                 },
 
                 select: function(info) {
-                    const idInst = document.getElementById('selector-instalacio').value;
-
-                    if (idInst === 'tots') {
+                    const espaisSeleccionats = Array.from(document.querySelectorAll('.space-filter-checkbox:checked'));
+                    if (espaisSeleccionats.length !== 1) {
                         Swal.fire({
                             title: 'Atenció',
-                            text: 'Selecciona una instal·lació específica.',
+                            text: 'Per crear una reserva, selecciona només un espai al filtre.',
                             icon: 'warning',
                             confirmButtonColor: '#1a1a1a'
                         });
                         calendar.unselect();
                         return;
                     }
+                    const idInst = espaisSeleccionats[0].value;
 
                     Swal.fire({
                         title: 'NOVA ACTIVITAT',
@@ -674,27 +711,42 @@ input, select, textarea, button { max-width: 100%; }
             setTimeout(() => { document.getElementById(`reserva-lateral-${r.id}`).style.opacity = '1'; }, 50);
         }
 
-        function filtrarPerDesplegable(valor) {
-            if (calendar) {
-                const cerca = String(valor); // El valor que arriba del selector
+        function filtrarPerDesplegable() {
+            if (!calendar) return;
 
-                calendar.getEvents().forEach(ev => {
-                    const idInst = String(ev.extendedProps.id_inst || "");
-                    const idPare = String(ev.extendedProps.id_pare || "");
-                    const tipus = ev.extendedProps.tipus;
+            const seleccionats = Array.from(document.querySelectorAll('.space-filter-checkbox:checked'))
+                .map(casella => String(casella.value));
+            const llistaEspais = document.querySelector('.space-filter-list');
+            const totalEspais = Number(llistaEspais?.dataset.totalEspais || 0);
+            const nombreEspaisVisibles = seleccionats.length || totalEspais;
+            const filtre = document.getElementById('selector-instalacio');
 
-                    // Decidim si es mostra o s'amaga
-                    const esTots = (cerca === 'tots');
-                    const esCoincidencia = (idInst === cerca || idPare === cerca);
-                    const esExcepcio = (tipus === 'extra' || tipus === 'conserge');
-
-                    if (esTots || esCoincidencia || esExcepcio) {
-                        ev.setProp('display', 'auto'); // Es mostra
-                    } else {
-                        ev.setProp('display', 'none'); // S'amaga de veritat
-                    }
-                });
+            if (filtre) {
+                filtre.textContent = seleccionats.length === 0
+                    ? 'Totes les instal·lacions'
+                    : seleccionats.length === 1
+                        ? '1 espai seleccionat'
+                        : seleccionats.length + ' espais seleccionats';
             }
+
+            const densitat = nombreEspaisVisibles <= 1 ? 'calendar-density-1'
+                : nombreEspaisVisibles === 2 ? 'calendar-density-2'
+                : 'calendar-density-3plus';
+            const calendariEl = document.getElementById('calendar');
+            calendariEl.classList.remove('calendar-density-1', 'calendar-density-2', 'calendar-density-3plus');
+            calendariEl.classList.add(densitat);
+
+            calendar.getEvents().forEach(ev => {
+                const idInst = String(ev.extendedProps.id_inst || "");
+                const idPare = String(ev.extendedProps.id_pare || "");
+                const tipus = ev.extendedProps.tipus;
+                const esCoincidencia = seleccionats.length === 0 || seleccionats.includes(idInst) || seleccionats.includes(idPare);
+                const esExcepcio = (tipus === 'extra' || tipus === 'conserge');
+
+                ev.setProp('display', esCoincidencia || esExcepcio ? 'auto' : 'none');
+            });
+
+            calendar.updateSize();
         }
 
         function obrirGestioConserges() {
