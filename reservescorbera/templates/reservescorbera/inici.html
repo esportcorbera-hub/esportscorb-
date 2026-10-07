@@ -714,19 +714,22 @@ input, select, textarea, button { max-width: 100%; }
         function filtrarPerDesplegable() {
             if (!calendar) return;
 
-            const seleccionats = Array.from(document.querySelectorAll('.space-filter-checkbox:checked'))
-                .map(casella => String(casella.value));
+            const seleccionats = new Set(
+                Array.from(document.querySelectorAll('.space-filter-checkbox:checked'))
+                    .map(casella => String(casella.value))
+            );
+            const nombreSeleccionats = seleccionats.size;
             const llistaEspais = document.querySelector('.space-filter-list');
             const totalEspais = Number(llistaEspais?.dataset.totalEspais || 0);
-            const nombreEspaisVisibles = seleccionats.length || totalEspais;
+            const nombreEspaisVisibles = nombreSeleccionats || totalEspais;
             const filtre = document.getElementById('selector-instalacio');
 
             if (filtre) {
-                filtre.textContent = seleccionats.length === 0
+                filtre.textContent = nombreSeleccionats === 0
                     ? 'Totes les instal·lacions'
-                    : seleccionats.length === 1
+                    : nombreSeleccionats === 1
                         ? '1 espai seleccionat'
-                        : seleccionats.length + ' espais seleccionats';
+                        : nombreSeleccionats + ' espais seleccionats';
             }
 
             const densitat = nombreEspaisVisibles <= 1 ? 'calendar-density-1'
@@ -736,17 +739,20 @@ input, select, textarea, button { max-width: 100%; }
             calendariEl.classList.remove('calendar-density-1', 'calendar-density-2', 'calendar-density-3plus');
             calendariEl.classList.add(densitat);
 
-            calendar.getEvents().forEach(ev => {
-                const idInst = String(ev.extendedProps.id_inst || "");
-                const idPare = String(ev.extendedProps.id_pare || "");
-                const tipus = ev.extendedProps.tipus;
-                const esCoincidencia = seleccionats.length === 0 || seleccionats.includes(idInst) || seleccionats.includes(idPare);
-                const esExcepcio = (tipus === 'extra' || tipus === 'conserge');
+            // Agrupem els canvis perquè FullCalendar repinti una sola vegada.
+            calendar.batchRendering(() => {
+                for (const ev of calendar.getEvents()) {
+                    const idInst = String(ev.extendedProps.id_inst || "");
+                    const idPare = String(ev.extendedProps.id_pare || "");
+                    const tipus = ev.extendedProps.tipus;
+                    const esCoincidencia = nombreSeleccionats === 0 || seleccionats.has(idInst) || seleccionats.has(idPare);
+                    const esExcepcio = (tipus === 'extra' || tipus === 'conserge');
 
-                ev.setProp('display', esCoincidencia || esExcepcio ? 'auto' : 'none');
+                    ev.setProp('display', esCoincidencia || esExcepcio ? 'auto' : 'none');
+                }
             });
 
-            calendar.updateSize();
+            requestAnimationFrame(() => calendar.updateSize());
         }
 
         function obrirGestioConserges() {
