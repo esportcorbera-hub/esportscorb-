@@ -1017,10 +1017,11 @@ from django.contrib.auth.models import User
 def meves_reserves(request):
     ara = timezone.now() # Agafem el moment actual
     
-    # 1. Reserves de qui està loguejat (NOMÉS FUTURES o EN CURS)
+    # 1. Només reserves que al calendari apareixen a nom d'aquest usuari.
+    prefix_entitat = f"{request.user.username}:"
     reserves_usuari = Reserva.objects.filter(
-        entitat=request.user,
-        final__gte=ara  # Fem servir 'final' perquè si l'activitat encara no ha acabat, surti a la llista
+        activitat__istartswith=prefix_entitat,
+        final__gte=ara  # Inclou reserves futures i les que encara estan en curs
     ).exclude(
         activitat__icontains="CONSERGE:"
     ).order_by('inici')
@@ -1047,8 +1048,10 @@ def eliminar_reserva_entitat(request):
 
         # El tècnic pot anul·lar qualsevol reserva; la resta només les del seu usuari.
         es_tecnic = request.user.is_staff and not request.user.groups.filter(name='Conserge').exists()
-        if not es_tecnic and reserva.entitat_id != request.user.id:
-            return JsonResponse({'status': 'error', 'message': 'Només pots anul·lar les teves pròpies reserves.'}, status=403)
+        prefix_entitat = f"{request.user.username}:"
+        es_reserva_seva = reserva.activitat.upper().startswith(prefix_entitat.upper())
+        if not es_tecnic and not es_reserva_seva:
+            return JsonResponse({'status': 'error', 'message': 'Només pots anul·lar reserves que al calendari apareixen al teu nom.'}, status=403)
         
         # 1. Guardem les dades abans d'esborrar
         inici_local = timezone.localtime(reserva.inici)
