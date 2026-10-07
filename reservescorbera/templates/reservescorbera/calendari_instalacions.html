@@ -230,7 +230,7 @@ input, select, textarea, button { max-width: 100%; }
                         <select id="selectEntitat" class="form-select" onchange="validarSeleccio()">
                             <option value="">Selecciona una entitat</option>
                             {% for entitat in entitats %}
-                            <option value="{{ entitat.id }}">{{ entitat.first_name|default:entitat.username }}</option>
+                            <option value="{{ entitat.id }}">{% if es_tecnic and entitat.id == request.user.id %}TECNIC (el meu compte){% else %}{{ entitat.first_name|default:entitat.username }}{% endif %}</option>
                             {% endfor %}
                         </select>
                     </div>
