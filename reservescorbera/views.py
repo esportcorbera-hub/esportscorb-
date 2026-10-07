@@ -1026,13 +1026,10 @@ def _prefixos_nom_entitat_calendari(user):
 
 
 def _reserva_amb_nom_entitat(reserva, user):
-    """Comprova que la reserva pertany al compte i que el calendari la mostra al seu nom."""
-    return (
-        reserva.entitat_id == user.id
-        and any(
-            reserva.activitat.casefold().startswith(prefix.casefold())
-            for prefix in _prefixos_nom_entitat_calendari(user)
-        )
+    """El nom del calendari és el criteri per atribuir la reserva a l'entitat."""
+    return any(
+        reserva.activitat.casefold().startswith(prefix.casefold())
+        for prefix in _prefixos_nom_entitat_calendari(user)
     )
 
 
@@ -1046,8 +1043,7 @@ def meves_reserves(request):
     for prefix in noms_entitat:
         noms_calendari |= Q(activitat__istartswith=prefix)
     reserves_usuari = Reserva.objects.filter(
-        entitat=request.user
-    ).filter(noms_calendari).filter(
+        noms_calendari,
         final__gte=ara  # Inclou reserves futures i les que encara estan en curs
     ).exclude(
         activitat__icontains="CONSERGE:"
