@@ -1013,14 +1013,41 @@ def activitats_extra(request):
 
 from django.contrib.auth.models import User
 
+def _prefixos_nom_entitat_calendari(user):
+    """
+    Noms que utilitzen les diferents vies de creació al títol visible del calendari:
+    les entitats fan servir el nom d'usuari i el tècnic el nom visible (first_name).
+    """
+    noms = []
+    for nom in (user.username, user.first_name):
+        if nom and nom not in noms:
+            noms.append(nom)
+    return tuple(f"{nom}:" for nom in noms)
+
+
+def _reserva_amb_nom_entitat(reserva, user):
+    """Comprova que la reserva pertany al compte i que el calendari la mostra al seu nom."""
+    return (
+        reserva.entitat_id == user.id
+        and any(
+            reserva.activitat.casefold().startswith(prefix.casefold())
+            for prefix in _prefixos_nom_entitat_calendari(user)
+        )
+    )
+
+
 @login_required
 def meves_reserves(request):
     ara = timezone.now() # Agafem el moment actual
     
-    # 1. Només reserves que al calendari apareixen a nom d'aquest usuari.
-    prefix_entitat = f"{request.user.username}:"
+    # El compte i el nom visible al calendari han de coincidir amb aquesta entitat.
+    noms_entitat = _prefixos_nom_entitat_calendari(request.user)
+    noms_calendari = Q()
+    for prefix in noms_entitat:
+        noms_calendari |= Q(activitat__istartswith=prefix)
     reserves_usuari = Reserva.objects.filter(
-        activitat__istartswith=prefix_entitat,
+        entitat=request.user
+    ).filter(noms_calendari).filter(
         final__gte=ara  # Inclou reserves futures i les que encara estan en curs
     ).exclude(
         activitat__icontains="CONSERGE:"
@@ -1046,11 +1073,10 @@ def eliminar_reserva_entitat(request):
         reserva_id = request.POST.get('id')
         reserva = get_object_or_404(Reserva, id=reserva_id)
 
-        # El tècnic pot anul·lar qualsevol reserva; la resta només les del seu usuari.
+        # El tècnic pot anul·lar qualsevol reserva; les entitats només les
+        # vinculades al seu compte i que al calendari apareixen amb el seu nom.
         es_tecnic = request.user.is_staff and not request.user.groups.filter(name='Conserge').exists()
-        prefix_entitat = f"{request.user.username}:"
-        es_reserva_seva = reserva.activitat.upper().startswith(prefix_entitat.upper())
-        if not es_tecnic and not es_reserva_seva:
+        if not es_tecnic and not _reserva_amb_nom_entitat(reserva, request.user):
             return JsonResponse({'status': 'error', 'message': 'Només pots anul·lar reserves que al calendari apareixen al teu nom.'}, status=403)
         
         # 1. Guardem les dades abans d'esborrar
