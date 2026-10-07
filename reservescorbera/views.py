@@ -1052,10 +1052,14 @@ def meves_reserves(request):
     noms_calendari = Q()
     for prefix in noms_entitat:
         noms_calendari |= Q(activitat__istartswith=prefix)
-    reserves_usuari = Reserva.objects.filter(
+    reserves_query = Reserva.objects.filter(
         noms_calendari,
         final__gte=ara  # Inclou reserves futures i les que encara estan en curs
-    ).exclude(
+    )
+    # El calendari de les entitats només mostra reserves validades.
+    if "AEFCORBERA:" in noms_entitat:
+        reserves_query = reserves_query.filter(estat="validada")
+    reserves_usuari = reserves_query.exclude(
         activitat__icontains="CONSERGE:"
     ).order_by('inici')
     
