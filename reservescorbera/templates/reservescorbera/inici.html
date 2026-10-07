@@ -156,17 +156,25 @@
 .space-filter-option input { margin-top: 4px; flex: 0 0 auto; }
 .space-filter-option span { overflow-wrap: anywhere; }
 #calendar.calendar-density-1 { --fc-event-font-size: .82rem; --fc-event-padding: 2px 4px; }
-#calendar.calendar-density-2 { --fc-event-font-size: .74rem; --fc-event-padding: 1px 3px; }
-#calendar.calendar-density-3plus { --fc-event-font-size: .66rem; --fc-event-padding: 0 2px; }
+#calendar.calendar-density-2 { --fc-event-font-size: .76rem; --fc-event-padding: 1px 3px; }
+#calendar.calendar-density-3plus { --fc-event-font-size: .70rem; --fc-event-padding: 0 2px; }
+#calendar[class*="calendar-density-"] .fc-timegrid-event,
+#calendar[class*="calendar-density-"] .fc-daygrid-event { container-type: inline-size; }
 #calendar[class*="calendar-density-"] .fc-timegrid-event { padding: var(--fc-event-padding); }
-#calendar[class*="calendar-density-"] .fc-event-title,
+#calendar[class*="calendar-density-"] .fc-timegrid-event .fc-event-main,
 #calendar[class*="calendar-density-"] .fc-event-time,
-#calendar[class*="calendar-density-"] .fc-daygrid-event { font-size: var(--fc-event-font-size); line-height: 1.1; }
+#calendar[class*="calendar-density-"] .fc-daygrid-event .fc-event-title {
+    font-size: clamp(.68rem, 12cqw, var(--fc-event-font-size)); line-height: 1.1;
+}
+#calendar[class*="calendar-density-"] .fc-event-title { white-space: normal; overflow-wrap: anywhere; }
+#calendar[class*="calendar-density-"] .fc-timegrid-event .fc-event-main-frame,
+#calendar[class*="calendar-density-"] .fc-timegrid-event .fc-event-main { min-width: 0; }
 @media (max-width: 767.98px) {
     .space-filter { min-width: 0; max-width: calc(100vw - 150px); }
     .space-filter-list { right: auto; left: 0; }
-    #calendar.calendar-density-2 { --fc-event-font-size: .68rem; }
-    #calendar.calendar-density-3plus { --fc-event-font-size: .58rem; }
+    #calendar.calendar-density-1 { --fc-event-font-size: .74rem; }
+    #calendar.calendar-density-2 { --fc-event-font-size: .70rem; }
+    #calendar.calendar-density-3plus { --fc-event-font-size: .68rem; }
 }
 </style>
 
@@ -458,25 +466,16 @@ input, select, textarea, button { max-width: 100%; }
                 },
 
                 eventDidMount: function(info) {
-                    const selector = document.getElementById('selector-instalacio');
-                    if (!selector) return;
-                    const cerca = String(selector.value).trim();
-                    if (cerca === 'tots') { info.el.style.display = ''; return; }
-                    
+                    const seleccionats = Array.from(document.querySelectorAll('.space-filter-checkbox:checked'))
+                        .map(casella => String(casella.value));
                     const tipus = info.event.extendedProps.tipus;
-                    if (tipus === 'extra' || tipus === 'conserge' || info.event.allDay) { 
-                        info.el.style.display = ''; 
-                        return; 
-                    }
-                    
+                    const esExcepcio = (tipus === 'extra' || tipus === 'conserge' || info.event.allDay);
                     const idInst = String(info.event.extendedProps.id_inst || "").trim();
                     const idPare = String(info.event.extendedProps.id_pare || "").trim();
+                    const coincideix = seleccionats.length === 0 || seleccionats.includes(idInst) || seleccionats.includes(idPare);
 
-                    if (idInst === cerca || idPare === cerca) {
-                        info.el.style.display = ''; 
-                    } else {
-                        info.el.style.display = 'none';
-                    }
+                    info.el.style.display = esExcepcio || coincideix ? '' : 'none';
+                    info.el.setAttribute('title', info.event.title);
                 },
 
                 firstDay: 1,
@@ -602,6 +601,7 @@ input, select, textarea, button { max-width: 100%; }
                 },
             });
             calendar.render();
+            filtrarPerDesplegable();
 
             // Mantenir obert el lateral si escau (només tècnics)
             if (esTecnic) {
