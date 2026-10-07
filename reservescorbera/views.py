@@ -56,7 +56,10 @@ def inici(request):
     # 2. DADES PER AL TÈCNIC / CONSERGE
     pendents = []
     num_pendents = 0
-    entitats = User.objects.filter(is_active=True, is_staff=False).order_by('first_name', 'username') if request.user.is_staff else []
+    es_tecnic = request.user.is_staff and not request.user.groups.filter(name='Conserge').exists()
+    entitats = list(User.objects.filter(is_active=True, is_staff=False).order_by('first_name', 'username')) if request.user.is_staff else []
+    if es_tecnic:
+        entitats.insert(0, request.user)
     conserges = [] # Llista buida per defecte
     
     if request.user.is_staff:
