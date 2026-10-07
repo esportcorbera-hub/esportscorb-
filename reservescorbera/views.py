@@ -142,8 +142,9 @@ def fer_reserva(request, instalacio_id):
         es_tecnic = request.user.is_staff and not request.user.groups.filter(name='Conserge').exists()
         entitat_reserva = request.user
         if es_tecnic:
-            entitat_reserva = User.objects.filter(
-                pk=request.GET.get('entitat_id'), is_active=True, is_staff=False, is_superuser=False
+            entitat_id = request.GET.get('entitat_id')
+            entitat_reserva = request.user if str(entitat_id) == str(request.user.pk) else User.objects.filter(
+                pk=entitat_id, is_active=True, is_staff=False, is_superuser=False
             ).first()
             if not entitat_reserva:
                 messages.error(request, 'Selecciona una entitat vàlida.')
@@ -643,11 +644,15 @@ def pistes(request):
     es_tecnic = request.user.is_staff and not request.user.groups.filter(name='Conserge').exists()
     instalacions = Instalacio.objects.filter(parent__isnull=True).exclude(nom__icontains='extraordin').exclude(nom__icontains='personal esports').order_by('nom')
     
+    entitats = list(User.objects.filter(is_active=True, is_staff=False, is_superuser=False).order_by('first_name', 'username')) if es_tecnic else []
+    if es_tecnic:
+        entitats.insert(0, request.user)
+
     context = {
         'instalacions': instalacions,
         'avui': timezone.now().date(),
         'es_tecnic': es_tecnic,
-        'entitats': User.objects.filter(is_active=True, is_staff=False, is_superuser=False).order_by('first_name', 'username') if es_tecnic else []
+        'entitats': entitats
     }
     return render(request, 'reservescorbera/calendari_instalacions.html', context)
 
@@ -675,7 +680,8 @@ def accio_reserva(request):
         entitat_reserva = request.user
         if accio == 'crear':
             entitat_id = request.POST.get('entitat_id')
-            entitat_reserva = User.objects.filter(id=entitat_id, is_active=True, is_staff=False).first()
+            es_tecnic = request.user.is_staff and not request.user.groups.filter(name='Conserge').exists()
+            entitat_reserva = request.user if es_tecnic and str(entitat_id) == str(request.user.pk) else User.objects.filter(id=entitat_id, is_active=True, is_staff=False).first()
             if not entitat_reserva:
                 return JsonResponse({'status': 'error', 'message': 'Selecciona una entitat vàlida'}, status=400)
 
