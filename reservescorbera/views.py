@@ -1015,9 +1015,19 @@ from django.contrib.auth.models import User
 
 def _prefixos_nom_entitat_calendari(user):
     """
-    Noms que utilitzen les diferents vies de creació al títol visible del calendari:
-    les entitats fan servir el nom d'usuari i el tècnic el nom visible (first_name).
+    Retorna els prefixos literals amb què l'entitat apareix al calendari.
+    Les reserves d'AEFCORBERA s'etiqueten sempre amb el nom públic de l'entitat,
+    també quan el tècnic les crea en nom seu.
     """
+    username = (user.username or "").strip().casefold()
+    first_name = (user.first_name or "").strip().casefold()
+
+    if (
+        username in {"aefcorbera", "associacio_esportiva_futsal_corbera"}
+        or first_name in {"aefcorbera", "associació esportiva futsal corbera"}
+    ):
+        return ("AEFCORBERA:",)
+
     noms = []
     for nom in (user.username, user.first_name):
         if nom and nom not in noms:
