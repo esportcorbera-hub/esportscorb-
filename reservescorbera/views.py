@@ -398,9 +398,14 @@ def api_reserves(request):
     if rang_end and timezone.is_naive(rang_end):
         rang_end = timezone.make_aware(rang_end)
 
-    if es_staff:
+    if es_conserge:
+        # Les notes de consergeria només són visibles als comptes del grup Conserge.
         reserves = Reserva.objects.all()
+    elif es_staff:
+        # El tècnic veu totes les reserves, però no les notes internes de consergeria.
+        reserves = Reserva.objects.all().exclude(activitat__icontains='CONSERGE')
     else:
+        # Entitats i calendari públic no reben les notes internes de consergeria.
         reserves = Reserva.objects.filter(estat='validada').exclude(activitat__icontains='CONSERGE')
 
     if rang_start and rang_end and rang_end > rang_start:
