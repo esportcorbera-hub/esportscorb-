@@ -412,7 +412,10 @@ def api_reserves(request):
         reserves = reserves.filter(inici__lt=rang_end, final__gt=rang_start)
 
     # Load each reservation's facility and parent in the same query.
-    reserves = reserves.select_related('instalacio', 'instalacio__parent')
+    reserves = reserves.select_related('instalacio', 'instalacio__parent').only(
+        'id', 'activitat', 'inici', 'final', 'estat',
+        'instalacio__id', 'instalacio__nom', 'instalacio__color', 'instalacio__parent__id'
+    )
     
     events = []
 
