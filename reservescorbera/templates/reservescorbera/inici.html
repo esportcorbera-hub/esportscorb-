@@ -313,6 +313,9 @@ input, select, textarea, button { max-width: 100%; }
                 <details class="space-filter">
                     <summary id="selector-instalacio">Totes les instal·lacions</summary>
                     <div class="space-filter-list" data-total-espais="{{ instalacions|length }}">
+                        <button type="button" class="btn btn-sm btn-link text-start fw-bold px-2 py-1" onclick="seleccionarTotsElsEspais()">
+                            Seleccionar tots els espais
+                        </button>
                         {% for inst in instalacions %}
                         <label class="space-filter-option">
                             <input type="checkbox" class="space-filter-checkbox" value="{{ inst.id }}" onchange="filtrarPerDesplegable()">
@@ -709,6 +712,13 @@ input, select, textarea, button { max-width: 100%; }
                 </div>`;
             llista.insertAdjacentHTML('afterbegin', html);
             setTimeout(() => { document.getElementById(`reserva-lateral-${r.id}`).style.opacity = '1'; }, 50);
+        }
+
+        function seleccionarTotsElsEspais() {
+            document.querySelectorAll('.space-filter-checkbox').forEach(casella => {
+                casella.checked = true;
+            });
+            filtrarPerDesplegable();
         }
 
         function filtrarPerDesplegable() {
