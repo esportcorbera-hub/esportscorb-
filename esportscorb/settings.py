@@ -168,7 +168,7 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 
 # Utilitzem variables d'entorn per seguretat (les posarem a Vercel)
-EMAIL_HOST_USER = 'esportscorb@gmail.com'
+EMAIL_HOST_USER = 'esportcorbera@gmail.com'
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 
 # Remitent per defecte
