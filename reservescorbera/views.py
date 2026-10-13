@@ -31,12 +31,12 @@ def _rebutjar_reserva_i_notificar(reserva):
     nom_entitat = reserva.entitat.get_full_name().strip() or reserva.entitat.username
     assumpte = f"Sol·licitud de reserva rebutjada: {reserva.instalacio.nom}"
     missatge = (
-        f"Hola {nom_entitat},\\n\\n"
-        "Us informem que la vostra sol·licitud de reserva ha estat rebutjada.\\n\\n"
-        f"Espai: {reserva.instalacio.nom}\\n"
-        f"Activitat: {reserva.activitat}\\n"
-        f"Data: {inici_local.strftime('%d/%m/%Y')}\\n"
-        f"Horari: {inici_local.strftime('%H:%M')} - {final_local.strftime('%H:%M')}\\n\\n"
+        f"Hola {nom_entitat},\n\n"
+        "Us informem que la vostra sol·licitud de reserva ha estat rebutjada.\n\n"
+        f"Espai: {reserva.instalacio.nom}\n"
+        f"Activitat: {reserva.activitat}\n"
+        f"Data: {inici_local.strftime('%d/%m/%Y')}\n"
+        f"Horari: {inici_local.strftime('%H:%M')} - {final_local.strftime('%H:%M')}\n\n"
         "Si necessiteu més informació, contacteu amb el Servei d'Esports."
     )
     enviats = send_mail(
