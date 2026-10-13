@@ -20,6 +20,38 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.utils.dateparse import parse_datetime
 
+def _rebutjar_reserva_i_notificar(reserva):
+    """Notifica l'entitat i elimina la sol·licitud només si el correu s'ha enviat."""
+    destinatari = (reserva.entitat.email or '').strip()
+    if not destinatari:
+        raise ValueError("L'entitat no té cap correu electrònic registrat.")
+
+    inici_local = timezone.localtime(reserva.inici)
+    final_local = timezone.localtime(reserva.final)
+    nom_entitat = reserva.entitat.get_full_name().strip() or reserva.entitat.username
+    assumpte = f"Sol·licitud de reserva rebutjada: {reserva.instalacio.nom}"
+    missatge = (
+        f"Hola {nom_entitat},\\n\\n"
+        "Us informem que la vostra sol·licitud de reserva ha estat rebutjada.\\n\\n"
+        f"Espai: {reserva.instalacio.nom}\\n"
+        f"Activitat: {reserva.activitat}\\n"
+        f"Data: {inici_local.strftime('%d/%m/%Y')}\\n"
+        f"Horari: {inici_local.strftime('%H:%M')} - {final_local.strftime('%H:%M')}\\n\\n"
+        "Si necessiteu més informació, contacteu amb el Servei d'Esports."
+    )
+    enviats = send_mail(
+        assumpte,
+        missatge,
+        settings.DEFAULT_FROM_EMAIL,
+        [destinatari],
+        fail_silently=False,
+    )
+    if enviats != 1:
+        raise RuntimeError("El sistema no ha pogut confirmar l'enviament del correu.")
+
+    reserva.delete()
+
+
 # 1. HOME PÚBLIC
 def home(request):
     # Canviem .all() per .filter(parent__isnull=True)
@@ -46,9 +78,14 @@ def inici(request):
             reserva = Reserva.objects.get(id=reserva_id)
             if accio == 'validar':
                 reserva.estat = 'validada'
+                reserva.save()
             elif accio == 'rebutjar':
-                reserva.estat = 'rebutjada'
-            reserva.save()
+                try:
+                    _rebutjar_reserva_i_notificar(reserva)
+                except Exception as e:
+                    messages.error(request, f"No s'ha pogut rebutjar la sol·licitud: {e}")
+                else:
+                    messages.warning(request, "Sol·licitud rebutjada, correu enviat i reserva eliminada.")
         except Reserva.DoesNotExist:
             pass
         return redirect('/inici/?gestio=1')
@@ -400,12 +437,14 @@ def api_reserves(request):
 
     if es_conserge:
         # Les notes de consergeria només són visibles als comptes del grup Conserge.
-        reserves = Reserva.objects.all()
+        reserves = Reserva.objects.all().exclude(estat='rebutjada')
     elif es_staff:
-        # El tècnic veu totes les reserves, però no les notes internes de consergeria.
-        reserves = Reserva.objects.all().exclude(activitat__icontains='CONSERGE')
+        # El tècnic veu les reserves, però no les notes de consergeria ni les rebutjades.
+        reserves = Reserva.objects.all().exclude(
+            activitat__icontains='CONSERGE'
+        ).exclude(estat='rebutjada')
     else:
-        # Entitats i calendari públic no reben les notes internes de consergeria.
+        # Entitats i calendari públic no reben notes internes ni reserves rebutjades.
         reserves = Reserva.objects.filter(estat='validada').exclude(activitat__icontains='CONSERGE')
 
     if rang_start and rang_end and rang_end > rang_start:
@@ -641,9 +680,12 @@ def llista_pendents(request):
             messages.success(request, "Reserva aprovada correctament!")
             
         elif accio == 'rebutjar':
-            reserva.estat = 'rebutjada'
-            reserva.save()
-            messages.warning(request, "Reserva rebutjada.")
+            try:
+                _rebutjar_reserva_i_notificar(reserva)
+            except Exception as e:
+                messages.error(request, f"No s'ha pogut rebutjar la sol·licitud: {e}")
+            else:
+                messages.warning(request, "Sol·licitud rebutjada, correu enviat i reserva eliminada.")
             
         return redirect('llista_pendents')
 
@@ -736,10 +778,20 @@ def accio_reserva(request):
             extra.save()
             estat_final = 'validada'
         elif reserva:
-            if nou_titol: reserva.activitat = nou_titol
-            if nou_estat: reserva.estat = nou_estat
-            reserva.save()
-            estat_final = reserva.estat
+            if nou_estat == 'rebutjada':
+                try:
+                    _rebutjar_reserva_i_notificar(reserva)
+                except Exception as e:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': f"No s'ha pogut rebutjar la sol·licitud: {e}"
+                    }, status=400)
+                estat_final = 'eliminada'
+            else:
+                if nou_titol: reserva.activitat = nou_titol
+                if nou_estat: reserva.estat = nou_estat
+                reserva.save()
+                estat_final = reserva.estat
 
     return JsonResponse({
         'status': 'ok',
