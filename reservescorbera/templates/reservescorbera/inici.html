@@ -646,6 +646,15 @@ input, select, textarea, button { max-width: 100%; }
             })
             .then(response => response.json())
             .then(data => {
+                if (data.status === 'error') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'No s\u2019ha pogut rebutjar la sol\u00b7licitud',
+                        text: data.message || 'El correu no s’ha pogut enviar; la reserva continua pendent.'
+                    });
+                    return;
+                }
+
                 if (data.status === 'ok') {
                     calendar.refetchEvents(); 
 
