@@ -700,6 +700,87 @@ def accio_reserva(request):
             return JsonResponse({'status': 'error', 'message': 'Instal·lació no trobada'})
         
         activitat_reserva = f"{entitat_reserva.first_name or entitat_reserva.username}: {titol}" if accio == 'crear' else titol
+
+        if request.POST.get('repeticio_setmanal') == '1':
+            es_tecnic = request.user.is_staff and not request.user.groups.filter(name='Conserge').exists()
+            if accio != 'crear' or not es_tecnic:
+                return JsonResponse({'status': 'error', 'message': 'La repetició de reserves només està disponible per al tècnic.'}, status=403)
+            if request.POST.get('tipus') != 'reserva':
+                return JsonResponse({'status': 'error', 'message': 'Les notes de consergeria no es poden repetir.'}, status=400)
+
+            try:
+                data_inici_periode = datetime.strptime(request.POST.get('data_inici', ''), '%Y-%m-%d').date()
+                data_final_periode = datetime.strptime(request.POST.get('data_final', ''), '%Y-%m-%d').date()
+            except (TypeError, ValueError):
+                return JsonResponse({'status': 'error', 'message': 'Les dates del període no són vàlides.'}, status=400)
+
+            if data_final_periode < data_inici_periode:
+                return JsonResponse({'status': 'error', 'message': 'La data final no pot ser anterior a la inicial.'}, status=400)
+
+            try:
+                dies_setmana = {
+                    int(dia) for dia in request.POST.get('dies_setmana', '').split(',')
+                    if dia != ''
+                }
+            except ValueError:
+                return JsonResponse({'status': 'error', 'message': 'Els dies de la setmana no són vàlids.'}, status=400)
+
+            if not dies_setmana or any(dia < 0 or dia > 6 for dia in dies_setmana):
+                return JsonResponse({'status': 'error', 'message': 'Selecciona almenys un dia de la setmana vàlid.'}, status=400)
+
+            tot_el_dia = request.POST.get('tot_el_dia') == '1'
+            dia_final = 0
+            if tot_el_dia:
+                hora_inici_reserva = datetime.min.time()
+                hora_final_reserva = datetime.max.time()
+            else:
+                inici_seleccionat = parse_datetime(inici or '')
+                final_seleccionat = parse_datetime(final or '')
+                if not inici_seleccionat or not final_seleccionat:
+                    return JsonResponse({'status': 'error', 'message': 'Selecciona un horari vàlid al calendari.'}, status=400)
+                if timezone.is_naive(inici_seleccionat):
+                    inici_seleccionat = timezone.make_aware(inici_seleccionat)
+                if timezone.is_naive(final_seleccionat):
+                    final_seleccionat = timezone.make_aware(final_seleccionat)
+
+                inici_local = timezone.localtime(inici_seleccionat)
+                final_local = timezone.localtime(final_seleccionat)
+                hora_inici_reserva = inici_local.time().replace(tzinfo=None)
+                hora_final_reserva = final_local.time().replace(tzinfo=None)
+                if final_local.date() > inici_local.date() and hora_final_reserva <= hora_inici_reserva:
+                    dia_final = 1
+                elif hora_final_reserva <= hora_inici_reserva:
+                    return JsonResponse({'status': 'error', 'message': 'L’hora final ha de ser posterior a la inicial.'}, status=400)
+
+            noves_reserves = []
+            data_actual = data_inici_periode
+            while data_actual <= data_final_periode:
+                if data_actual.weekday() in dies_setmana:
+                    inici_reserva = timezone.make_aware(datetime.combine(data_actual, hora_inici_reserva))
+                    data_final_reserva = data_actual + timedelta(days=dia_final)
+                    final_reserva = timezone.make_aware(datetime.combine(data_final_reserva, hora_final_reserva))
+                    noves_reserves.append(Reserva(
+                        activitat=activitat_reserva,
+                        inici=inici_reserva,
+                        final=final_reserva,
+                        instalacio=instalacio_real,
+                        entitat=entitat_reserva,
+                        estat='validada'
+                    ))
+                data_actual += timedelta(days=1)
+
+            if not noves_reserves:
+                return JsonResponse({'status': 'error', 'message': 'No hi ha cap dia seleccionat dins del període.'}, status=400)
+
+            Reserva.objects.bulk_create(noves_reserves)
+            return JsonResponse({
+                'status': 'ok',
+                'message': f'S’han creat {len(noves_reserves)} reserves.',
+                'num_creades': len(noves_reserves),
+                'num_pendents': Reserva.objects.filter(estat='pendent').count(),
+                'estat_final': 'validada'
+            })
+
         nova_reserva = Reserva.objects.create(
             activitat=activitat_reserva,
             inici=inici,
