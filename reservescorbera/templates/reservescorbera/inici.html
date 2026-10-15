@@ -558,11 +558,34 @@ input, select, textarea, button { max-width: 100%; }
                         return;
                     }
                     const idInst = espaisSeleccionats[0].value;
+                    const formatDateInput = (date) => {
+                        const any = date.getFullYear();
+                        const mes = String(date.getMonth() + 1).padStart(2, '0');
+                        const dia = String(date.getDate()).padStart(2, '0');
+                        return `${any}-${mes}-${dia}`;
+                    };
+                    const dataIniciPeriode = formatDateInput(info.start);
+                    const dataFinalCalendari = new Date(info.end);
+                    if (info.allDay) dataFinalCalendari.setDate(dataFinalCalendari.getDate() - 1);
+                    const dataFinalPeriode = formatDateInput(dataFinalCalendari);
+                    const opcionsDies = [
+                        { value: 0, label: 'Dl' }, { value: 1, label: 'Dt' },
+                        { value: 2, label: 'Dc' }, { value: 3, label: 'Dj' },
+                        { value: 4, label: 'Dv' }, { value: 5, label: 'Ds' },
+                        { value: 6, label: 'Dg' }
+                    ];
+                    const diaSeleccionat = (info.start.getDay() + 6) % 7;
+                    const diesSetmanaHtml = opcionsDies.map(dia => `
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input swal-dia-setmana" type="checkbox" value="${dia.value}" id="swal-dia-${dia.value}" ${dia.value === diaSeleccionat ? 'checked' : ''}>
+                            <label class="form-check-label" for="swal-dia-${dia.value}">${dia.label}</label>
+                        </div>
+                    `).join('');
 
                     Swal.fire({
                         title: 'NOVA ACTIVITAT',
                         html: `
-                            <div class="text-start">
+                            <div class="text-start" style="max-height:65vh;overflow-y:auto">
                                 <label class="small fw-bold">Entitat:</label>
                                 <select id="swal-entitat" class="form-select mb-3" required>
                                     <option value="">Selecciona una entitat</option>
@@ -573,20 +596,57 @@ input, select, textarea, button { max-width: 100%; }
                                 <label class="small fw-bold">Nom de l'activitat:</label>
                                 <input id="swal-nou-titol" class="form-control mb-3">
                                 <label class="small fw-bold">Tipus:</label>
-                                <select id="swal-nou-tipus" class="form-select">
+                                <select id="swal-nou-tipus" class="form-select mb-3">
                                     <option value="reserva">Reserva Estàndard</option>
                                     <option value="conserge">👤 Nota de Consergeria</option>
                                 </select>
+                                ${esTecnic ? `
+                                <div id="swal-repeticio" class="border-top pt-3 mt-2">
+                                    <div class="fw-bold small mb-2">Període de l’activitat</div>
+                                    <label class="small fw-bold" for="swal-data-inici">Data d’inici:</label>
+                                    <input id="swal-data-inici" type="date" class="form-control mb-2" value="${dataIniciPeriode}">
+                                    <label class="small fw-bold" for="swal-data-final">Data final:</label>
+                                    <input id="swal-data-final" type="date" class="form-control mb-2" value="${dataFinalPeriode}">
+                                    <label class="small fw-bold d-block">Dies de la setmana:</label>
+                                    <div class="mb-2">${diesSetmanaHtml}</div>
+                                    <small class="text-muted">Es repetirà cada setmana en aquests dies, mantenint l’horari seleccionat al calendari.</small>
+                                </div>` : ''}
                             </div>
                         `,
                         showCancelButton: true,
                         confirmButtonText: 'Crear',
+                        didOpen: () => {
+                            const tipusEl = document.getElementById('swal-nou-tipus');
+                            const repeticioEl = document.getElementById('swal-repeticio');
+                            const actualitzarVisibilitat = () => {
+                                if (repeticioEl) repeticioEl.style.display = tipusEl.value === 'reserva' ? 'block' : 'none';
+                            };
+                            if (tipusEl) tipusEl.addEventListener('change', actualitzarVisibilitat);
+                            actualitzarVisibilitat();
+                        },
                         preConfirm: () => {
                             const titol = document.getElementById('swal-nou-titol').value;
                             const entitatId = document.getElementById('swal-entitat').value;
+                            const tipus = document.getElementById('swal-nou-tipus').value;
                             if (!entitatId) return Swal.showValidationMessage('Selecciona una entitat');
                             if (!titol) return Swal.showValidationMessage('Escriu un nom');
-                            return { titol, entitat_id: document.getElementById('swal-entitat').value, tipus: document.getElementById('swal-nou-tipus').value };
+                            const resultat = { titol, entitat_id: entitatId, tipus };
+                            if (esTecnic && tipus === 'reserva') {
+                                const dataInici = document.getElementById('swal-data-inici').value;
+                                const dataFinal = document.getElementById('swal-data-final').value;
+                                const diesSeleccionats = Array.from(document.querySelectorAll('.swal-dia-setmana:checked')).map(dia => dia.value);
+                                if (!dataInici || !dataFinal) return Swal.showValidationMessage('Selecciona les dues dates');
+                                if (dataFinal < dataInici) return Swal.showValidationMessage('La data final no pot ser anterior a la inicial');
+                                if (!diesSeleccionats.length) return Swal.showValidationMessage('Selecciona almenys un dia de la setmana');
+                                Object.assign(resultat, {
+                                    repeticio_setmanal: '1',
+                                    data_inici: dataInici,
+                                    data_final: dataFinal,
+                                    dies_setmana: diesSeleccionats.join(','),
+                                    tot_el_dia: info.allDay ? '1' : '0'
+                                });
+                            }
+                            return resultat;
                         }
                     }).then((result) => {
                         if (result.isConfirmed) {
@@ -594,6 +654,11 @@ input, select, textarea, button { max-width: 100%; }
                                 titol: result.value.titol,
                                 entitat_id: result.value.entitat_id,
                                 tipus: result.value.tipus,
+                                repeticio_setmanal: result.value.repeticio_setmanal || '',
+                                data_inici: result.value.data_inici || '',
+                                data_final: result.value.data_final || '',
+                                dies_setmana: result.value.dies_setmana || '',
+                                tot_el_dia: result.value.tot_el_dia || '',
                                 inici: info.startStr,
                                 final: info.endStr,
                                 id_inst: idInst
