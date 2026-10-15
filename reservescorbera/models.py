@@ -80,3 +80,34 @@ class ActivitatExtra(models.Model):
 
     def __str__(self):
         return self.titol
+
+class HorariConserge(models.Model):
+    TORN_CHOICES = [
+        ('A', 'Exterior 1'),
+        ('B', 'Pavelló 1'),
+        ('C', 'Exterior 2'),
+        ('D', 'Pavelló 2'),
+    ]
+
+    conserge = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='horaris_consergeria'
+    )
+    torn = models.CharField(max_length=1, choices=TORN_CHOICES)
+    data_inici = models.DateField(help_text="Data a partir de la qual s'aplica el torn.")
+    repeteix_cada_quatre_setmanes = models.BooleanField(default=True)
+    actiu = models.BooleanField(default=True)
+    creat_el = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['data_inici', 'conserge__first_name', 'conserge__username']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['conserge', 'torn', 'data_inici'],
+                name='unique_horari_conserge_torn_data'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.conserge} - {self.get_torn_display()} des de {self.data_inici}"
