@@ -46,6 +46,9 @@ urlpatterns = [
     path('eliminar-reserva-entitat/', views.eliminar_reserva_entitat, name='eliminar_reserva_entitat'),
     # APIs
     path('api/reserves/', views.api_reserves, name='api_reserves'),
+    path('api/horaris-consergeria/', views.api_horaris_consergeria, name='api_horaris_consergeria'),
+    path('api/horaris-consergeria/assignar/', views.assignar_horari_consergeria, name='assignar_horari_consergeria'),
+    path('api/horaris-consergeria/eliminar/<int:pk>/', views.eliminar_horari_consergeria, name='eliminar_horari_consergeria'),
     path('api/hores-ocupades/', views.api_hores_ocupades, name='api_hores_ocupades'),
 
 
