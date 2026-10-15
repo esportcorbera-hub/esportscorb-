@@ -936,7 +936,10 @@ input, select, textarea, button { max-width: 100%; }
 
                         <div class="form-check mb-3">
                             <input class="form-check-input" type="checkbox" id="cons-repeticio" checked>
-                            <label class="form-check-label small" for="cons-repeticio">Repetir cada 4 setmanes indefinidament</label>
+                            <label class="form-check-label small" for="cons-repeticio">Rotar de torn cada 4 setmanes indefinidament</label>
+                        </div>
+                        <div class="small text-white-50 mb-3">
+                            El torn seleccionat serà el punt d’inici. Amb la rotació activa, el torn canvia cada quatre setmanes segons el cicle de cada persona.
                         </div>
 
                         <hr style="border-color:#555">
@@ -944,7 +947,7 @@ input, select, textarea, button { max-width: 100%; }
                         <div id="cons-horaris-assignats" class="conserge-shift-list">
                             {% for h in horaris_conserges %}
                             <div id="horari-conserge-{{ h.id }}" class="d-flex justify-content-between align-items-center gap-2 border-bottom border-secondary py-2">
-                                <span class="small text-start">{{ h.conserge.get_full_name|default:h.conserge.username }} · {{ h.get_torn_display }} · des del {{ h.data_inici|date:"d/m/Y" }} · {% if h.repeteix_cada_quatre_setmanes %}cada 4 setmanes{% else %}una setmana{% endif %}</span>
+                                <span class="small text-start">{{ h.conserge.get_full_name|default:h.conserge.username }} · {{ h.get_torn_display }} · des del {{ h.data_inici|date:"d/m/Y" }} · {% if h.repeteix_cada_quatre_setmanes %}rotació cada 4 setmanes{% else %}una setmana{% endif %}</span>
                                 <button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0" onclick="eliminarHorariConserge({{ h.id }})">Eliminar</button>
                             </div>
                             {% empty %}
