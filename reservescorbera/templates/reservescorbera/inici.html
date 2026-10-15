@@ -221,6 +221,12 @@ input, select, textarea, button { max-width: 100%; }
 }
 </style>
 
+<style id="conserge-shift-labels">
+    .horaris-consergeria-dia { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; white-space: normal; }
+    .horari-conserge-etiqueta { display: block; border-left: 3px solid #d4af37; border-radius: 3px; background: #fff8dc; color: #292929; padding: 2px 4px; font-size: .68rem; line-height: 1.2; font-weight: 600; text-align: left; }
+    .fc-col-header-cell-cushion { white-space: normal !important; }
+    .conserge-shift-list { max-height: 180px; overflow-y: auto; }
+</style>
 </head>
 <body>
 
@@ -381,6 +387,7 @@ input, select, textarea, button { max-width: 100%; }
 
     <script>
         let calendar;
+        let horarisConsergeriaPerDia = {};
         // Constants de Rol
         const esConserge = "{{ user.groups.all.0.name }}" === "Conserge";
         const esStaff = "{{ user.is_staff }}" === "True";
@@ -492,6 +499,9 @@ input, select, textarea, button { max-width: 100%; }
                 },
                 buttonText: { today: 'Avui', month: 'Mes', week: 'Setmana', day: 'Dia' },
                 events: '/api/reserves/',
+                datesSet: function(info) { actualitzarHorarisConsergeria(info); },
+                dayHeaderDidMount: function() { requestAnimationFrame(renderHorarisConsergeria); },
+                dayCellDidMount: function() { requestAnimationFrame(renderHorarisConsergeria); },
                 
                 // --- LÒGICA D'EDICIÓ EN CLICAR ---
                 eventClick: function(info) {
@@ -848,62 +858,149 @@ input, select, textarea, button { max-width: 100%; }
             requestAnimationFrame(() => calendar.updateSize());
         }
 
+        function actualitzarHorarisConsergeria(info) {
+            if (!esConserge && !esTecnic) return Promise.resolve();
+            const params = new URLSearchParams({
+                start: info.startStr,
+                end: info.endStr
+            });
+            return fetch(`/api/horaris-consergeria/?${params.toString()}`)
+                .then(response => response.ok ? response.json() : [])
+                .then(horaris => {
+                    horarisConsergeriaPerDia = {};
+                    horaris.forEach(horari => {
+                        if (!horarisConsergeriaPerDia[horari.data]) horarisConsergeriaPerDia[horari.data] = [];
+                        horarisConsergeriaPerDia[horari.data].push(horari);
+                    });
+                    requestAnimationFrame(renderHorarisConsergeria);
+                })
+                .catch(error => console.error('No s’han pogut carregar els horaris de consergeria:', error));
+        }
+
+        function renderHorarisConsergeria() {
+            document.querySelectorAll('#calendar .horaris-consergeria-dia').forEach(element => element.remove());
+            const cel·les = document.querySelectorAll('#calendar .fc-col-header-cell[data-date], #calendar .fc-daygrid-day[data-date]');
+            cel·les.forEach(cella => {
+                const horaris = horarisConsergeriaPerDia[cella.dataset.date] || [];
+                if (!horaris.length) return;
+                const contenidor = cella.classList.contains('fc-col-header-cell')
+                    ? cella.querySelector('.fc-col-header-cell-cushion')?.parentElement
+                    : cella.querySelector('.fc-daygrid-day-top');
+                if (!contenidor) return;
+                const llista = document.createElement('div');
+                llista.className = 'horaris-consergeria-dia';
+                horaris.forEach(horari => {
+                    const etiqueta = document.createElement('span');
+                    etiqueta.className = 'horari-conserge-etiqueta';
+                    etiqueta.textContent = `${horari.persona} · ${horari.torn} · ${horari.inici}–${horari.final}`;
+                    etiqueta.title = `${horari.persona} — ${horari.torn} — ${horari.inici}–${horari.final}`;
+                    llista.appendChild(etiqueta);
+                });
+                contenidor.appendChild(llista);
+            });
+        }
+
         function obrirGestioConserges() {
             Swal.fire({
-                title: 'ASSIGNAR HORARI CONSERGE',
+                title: 'GESTIÓ D’HORARIS DE CONSERGERIA',
                 background: '#1a1a1a',
                 color: '#fff',
+                width: 650,
                 html: `
                     <div class="text-start">
-                        <label class="small fw-bold" style="color: #d4af37">Selecciona el Conserge:</label>
-                        <select id="cons-nom" class="form-select mb-3" style="background: #222; color: white; border: 1px solid #444;">
-                            <option value="" disabled selected>--- Tria un conserge ---</option>
+                        <label class="small fw-bold" style="color:#d4af37">Conserge:</label>
+                        <select id="cons-nom" class="form-select mb-3" style="background:#222;color:white;border:1px solid #444">
+                            <option value="">Tria un conserge</option>
                             {% for c in conserges %}
-                                <option value="{{ c.username }}">{{ c.get_full_name|default:c.username }}</option>
+                            <option value="{{ c.id }}">{{ c.get_full_name|default:c.username }}</option>
                             {% empty %}
-                                <option value="" disabled>No hi ha conserges creats</option>
+                            <option value="" disabled>No hi ha conserges creats</option>
                             {% endfor %}
                         </select>
-                        
-                        <label class="small fw-bold" style="color: #d4af37">Data:</label>
-                        <input id="cons-data" type="date" class="form-control mb-3" style="background: #222; color: white; border: 1px solid #444;" value="${new Date().toISOString().split('T')[0]}">
-                        
-                        <label class="small fw-bold" style="color: #d4af37">Torn / Horari:</label>
-                        <select id="cons-torn" class="form-select" style="background: #222; color: white; border: 1px solid #444;">
-                            <option value="Exterior (14:30 - 23:15)">Exterior (14:30 - 23:15)</option>
-                            <option value="Pavelló (14:30 - 24:00)">Pavelló (14:30 - 24:00)</option>
-                            <option value="Exterior (09:00 - 21:00)">Exterior (09:00 - 21:00)</option>
-                            <option value="Pavelló (08:00 - 21:30)">Pavelló (08:00 - 21:30)</option>
-                            <option value="Pavelló (09:00 - 20:30)">Pavelló (09:00 - 20:30)</option>
+
+                        <label class="small fw-bold" style="color:#d4af37">Torn:</label>
+                        <select id="cons-torn" class="form-select mb-3" style="background:#222;color:white;border:1px solid #444">
+                            <option value="A">A · Exterior 1 · Dl-Dt 14:30–23:15 · Ds-Dg 09:00–21:00</option>
+                            <option value="B">B · Pavelló 1 · Dl-Dt 14:30–24:00 · Ds 08:00–21:30 · Dg 09:00–20:30</option>
+                            <option value="C">C · Exterior 2 · Dc-Dv 14:30–23:15</option>
+                            <option value="D">D · Pavelló 2 · Dc-Dv 14:30–24:00</option>
                         </select>
+
+                        <label class="small fw-bold" style="color:#d4af37">Data d’inici del torn:</label>
+                        <input id="cons-data-inici" type="date" class="form-control mb-3" style="background:#222;color:white;border:1px solid #444" value="${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}">
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="cons-repeticio" checked>
+                            <label class="form-check-label small" for="cons-repeticio">Repetir cada 4 setmanes indefinidament</label>
+                        </div>
+
+                        <hr style="border-color:#555">
+                        <div class="small fw-bold mb-2" style="color:#d4af37">Horaris assignats</div>
+                        <div id="cons-horaris-assignats" class="conserge-shift-list">
+                            {% for h in horaris_conserges %}
+                            <div id="horari-conserge-{{ h.id }}" class="d-flex justify-content-between align-items-center gap-2 border-bottom border-secondary py-2">
+                                <span class="small text-start">{{ h.conserge.get_full_name|default:h.conserge.username }} · {{ h.get_torn_display }} · des del {{ h.data_inici|date:"d/m/Y" }} · {% if h.repeteix_cada_quatre_setmanes %}cada 4 setmanes{% else %}una setmana{% endif %}</span>
+                                <button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0" onclick="eliminarHorariConserge({{ h.id }})">Eliminar</button>
+                            </div>
+                            {% empty %}
+                            <div id="cons-horaris-buits" class="small text-muted py-2">Encara no hi ha horaris assignats.</div>
+                            {% endfor %}
+                        </div>
                     </div>
                 `,
                 showCancelButton: true,
-                confirmButtonText: 'Assignar Horari',
+                confirmButtonText: 'Assignar horari',
                 confirmButtonColor: '#d4af37',
-                cancelButtonText: 'Cancel·lar',
+                cancelButtonText: 'Tancar',
                 preConfirm: () => {
-                    const nom = document.getElementById('cons-nom').value;
-                    const data = document.getElementById('cons-data').value;
+                    const consergeId = document.getElementById('cons-nom').value;
                     const torn = document.getElementById('cons-torn').value;
-                    
-                    if (!nom) {
-                        Swal.showValidationMessage('Per favor, selecciona un conserge');
-                        return false;
-                    }
-                    return { nom, data, torn };
+                    const dataInici = document.getElementById('cons-data-inici').value;
+                    const repeteix = document.getElementById('cons-repeticio').checked;
+                    if (!consergeId) return Swal.showValidationMessage('Selecciona un conserge');
+                    if (!dataInici) return Swal.showValidationMessage('Indica la data d’inici');
+                    return { consergeId, torn, dataInici, repeteix };
                 }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // Creem el títol amb el prefix que el calendari reconeixerà
-                    const titolEspecial = `CONSERGE: ${result.value.nom} (${result.value.torn})`;
-                    
-                    // Enviem les dades (Inici i Final el mateix dia per complir el model)
-                    enviarAccioReserva(null, 'crear_directe', { 
-                        titol: titolEspecial,
-                        inici: `${result.value.data}T00:00:00`,
-                        final: `${result.value.data}T23:59:59`
-                    });
+            }).then(async result => {
+                if (!result.isConfirmed) return;
+                const dades = new FormData();
+                dades.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+                dades.append('conserge_id', result.value.consergeId);
+                dades.append('torn', result.value.torn);
+                dades.append('data_inici', result.value.dataInici);
+                dades.append('repeteix_cada_quatre_setmanes', result.value.repeteix ? '1' : '0');
+                try {
+                    const resposta = await fetch("{% url 'assignar_horari_consergeria' %}", { method: 'POST', body: dades });
+                    const dadesResposta = await resposta.json();
+                    if (!resposta.ok) throw new Error(dadesResposta.error || 'No s’ha pogut assignar l’horari.');
+                    await Swal.fire({ title: 'Horari assignat', text: 'S’ha afegit al calendari de consergeria.', icon: 'success', confirmButtonColor: '#d4af37' });
+                    window.location.reload();
+                } catch (error) {
+                    Swal.fire({ title: 'No s’ha pogut assignar', text: error.message, icon: 'error', confirmButtonColor: '#d4af37' });
+                }
+            });
+        }
+
+        function eliminarHorariConserge(id) {
+            Swal.fire({
+                title: 'Eliminar aquest horari?',
+                text: 'Deixarà d’aparèixer al calendari des d’ara.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Eliminar',
+                confirmButtonColor: '#dc3545',
+                cancelButtonText: 'Cancel·lar'
+            }).then(async result => {
+                if (!result.isConfirmed) return;
+                const dades = new FormData();
+                dades.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+                try {
+                    const resposta = await fetch(`/api/horaris-consergeria/eliminar/${id}/`, { method: 'POST', body: dades });
+                    const dadesResposta = await resposta.json();
+                    if (!resposta.ok) throw new Error(dadesResposta.error || 'No s’ha pogut eliminar l’horari.');
+                    window.location.reload();
+                } catch (error) {
+                    Swal.fire({ title: 'No s’ha pogut eliminar', text: error.message, icon: 'error', confirmButtonColor: '#d4af37' });
                 }
             });
         }
