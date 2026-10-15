@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.utils import timezone
 from django.db.models import Q  
 from datetime import datetime
-from .models import Instalacio, Reserva, PlantillaReserva, ActivitatExtra
+from .models import Instalacio, Reserva, PlantillaReserva, ActivitatExtra, HorariConserge
 from .forms import UserProfileForm  # El punt (.) vol dir "en aquesta mateixa carpeta"
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth import update_session_auth_hash
@@ -61,6 +61,9 @@ def inici(request):
     if es_tecnic:
         entitats.insert(0, request.user)
     conserges = [] # Llista buida per defecte
+    horaris_conserges = []
+    if es_tecnic:
+        horaris_conserges = HorariConserge.objects.filter(actiu=True).select_related('conserge')
     
     if request.user.is_staff:
         ara = timezone.now()
@@ -89,6 +92,7 @@ def inici(request):
         'pendents': pendents,
         'num_pendents': num_pendents,
         'conserges': conserges,  # <--- ARA SÍ: Arribarà al JS del SweetAlert
+        'horaris_conserges': horaris_conserges,
         'entitats': entitats,
         'es_tecnic': request.user.is_staff
     }
@@ -1289,3 +1293,144 @@ def esborrar_reserves_periode(request):
         return redirect('pantalla_brossa')
         
     return redirect('pantalla_brossa')
+
+
+# 13. HORARIS RECURRENTS DE CONSERGERIA
+TORNS_CONSERGERIA = {
+    'A': {
+        'nom': 'Exterior 1',
+        'espai': 'Exterior',
+        'dies': {0: ('14:30', '23:15'), 1: ('14:30', '23:15'), 5: ('09:00', '21:00'), 6: ('09:00', '21:00')},
+    },
+    'B': {
+        'nom': 'Pavelló 1',
+        'espai': 'Pavelló',
+        'dies': {0: ('14:30', '24:00'), 1: ('14:30', '24:00'), 5: ('08:00', '21:30'), 6: ('09:00', '20:30')},
+    },
+    'C': {
+        'nom': 'Exterior 2',
+        'espai': 'Exterior',
+        'dies': {2: ('14:30', '23:15'), 3: ('14:30', '23:15'), 4: ('14:30', '23:15')},
+    },
+    'D': {
+        'nom': 'Pavelló 2',
+        'espai': 'Pavelló',
+        'dies': {2: ('14:30', '24:00'), 3: ('14:30', '24:00'), 4: ('14:30', '24:00')},
+    },
+}
+
+
+def _es_tecnic_consergeria(user):
+    return user.is_staff and not user.groups.filter(name='Conserge').exists()
+
+
+def _serialitzar_horari_conserge(horari):
+    return {
+        'id': horari.id,
+        'persona': horari.conserge.get_full_name() or horari.conserge.username,
+        'torn': TORNS_CONSERGERIA[horari.torn]['nom'],
+        'data_inici': horari.data_inici.isoformat(),
+        'repeteix': horari.repeteix_cada_quatre_setmanes,
+    }
+
+
+@login_required
+def api_horaris_consergeria(request):
+    es_conserge = request.user.groups.filter(name='Conserge').exists()
+    if not (es_conserge or _es_tecnic_consergeria(request.user)):
+        return JsonResponse({'error': 'No tens accés als horaris de consergeria.'}, status=403)
+
+    inici_raw = request.GET.get('start', '')
+    final_raw = request.GET.get('end', '')
+    inici_dt = parse_datetime(inici_raw)
+    final_dt = parse_datetime(final_raw)
+    data_inici = timezone.localtime(inici_dt).date() if inici_dt and timezone.is_aware(inici_dt) else (
+        inici_dt.date() if inici_dt else timezone.localdate()
+    )
+    data_final = timezone.localtime(final_dt).date() if final_dt and timezone.is_aware(final_dt) else (
+        final_dt.date() if final_dt else data_inici + timedelta(days=42)
+    )
+    if data_final <= data_inici:
+        return JsonResponse({'error': 'El període del calendari no és vàlid.'}, status=400)
+
+    horaris = HorariConserge.objects.filter(
+        actiu=True,
+        data_inici__lt=data_final
+    ).select_related('conserge').order_by('conserge__first_name', 'conserge__username')
+
+    resultats = []
+    nombre_dies = (data_final - data_inici).days
+    for horari in horaris:
+        patro = TORNS_CONSERGERIA.get(horari.torn)
+        if not patro:
+            continue
+        for offset in range(nombre_dies):
+            data = data_inici + timedelta(days=offset)
+            if data < horari.data_inici:
+                continue
+            setmana = (data - horari.data_inici).days // 7
+            if horari.repeteix_cada_quatre_setmanes:
+                if setmana % 4 != 0:
+                    continue
+            elif setmana != 0:
+                continue
+            franja = patro['dies'].get(data.weekday())
+            if not franja:
+                continue
+            resultats.append({
+                'data': data.isoformat(),
+                'persona': horari.conserge.get_full_name() or horari.conserge.username,
+                'torn': patro['nom'],
+                'espai': patro['espai'],
+                'inici': franja[0],
+                'final': franja[1],
+            })
+
+    return JsonResponse(resultats, safe=False)
+
+
+@staff_member_required
+@require_POST
+def assignar_horari_consergeria(request):
+    if not _es_tecnic_consergeria(request.user):
+        return JsonResponse({'error': 'Només el tècnic pot assignar horaris.'}, status=403)
+
+    conserge = User.objects.filter(
+        pk=request.POST.get('conserge_id'),
+        is_active=True,
+        groups__name='Conserge'
+    ).first()
+    torn = request.POST.get('torn', '')
+    try:
+        data_inici = datetime.strptime(request.POST.get('data_inici', ''), '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'Indica una data d’inici vàlida.'}, status=400)
+
+    if not conserge:
+        return JsonResponse({'error': 'Selecciona un conserge vàlid.'}, status=400)
+    if torn not in TORNS_CONSERGERIA:
+        return JsonResponse({'error': 'Selecciona un dels quatre torns disponibles.'}, status=400)
+
+    repeteix = request.POST.get('repeteix_cada_quatre_setmanes') == '1'
+    horari, creat = HorariConserge.objects.get_or_create(
+        conserge=conserge,
+        torn=torn,
+        data_inici=data_inici,
+        defaults={'repeteix_cada_quatre_setmanes': repeteix, 'actiu': True},
+    )
+    if not creat:
+        return JsonResponse({'error': 'Aquest horari ja està assignat a aquesta persona per a la data indicada.'}, status=409)
+
+    resposta = _serialitzar_horari_conserge(horari)
+    return JsonResponse(resposta, status=201)
+
+
+@staff_member_required
+@require_POST
+def eliminar_horari_consergeria(request, pk):
+    if not _es_tecnic_consergeria(request.user):
+        return JsonResponse({'error': 'Només el tècnic pot modificar els horaris.'}, status=403)
+    horari = get_object_or_404(HorariConserge, pk=pk, actiu=True)
+    horari.actiu = False
+    horari.save(update_fields=['actiu'])
+    return JsonResponse({'status': 'ok', 'id': horari.id})
