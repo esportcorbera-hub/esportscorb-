@@ -733,17 +733,35 @@ input, select, textarea, button { max-width: 100%; }
                     // 👇 NOMÉS MOSTRAR L'ALERTA SI NO ÉS UNA ACCIÓ SILENCIOSA
                     // Pots decidir quines accions vols que avisin i quines no
                     const accionsAmbAlerta = ['crear_directe', 'eliminar', 'validar', 'rebutjar'];
-                    if (accionsAmbAlerta.includes(accio)) {
-                        Swal.fire({ 
-                            title: 'Fet!', 
-                            icon: 'success', 
-                            timer: 700, 
-                            showConfirmButton: false 
+                    if (accionsAmbAlerta.includes(accio) || data.num_creades) {
+                        Swal.fire({
+                            title: data.num_creades ? 'Reserves creades' : 'Fet!',
+                            text: data.num_creades ? data.message : '',
+                            icon: 'success',
+                            timer: data.num_creades ? 1800 : 700,
+                            showConfirmButton: false
                         });
                     }
+                } else if (accio === 'crear') {
+                    Swal.fire({
+                        title: 'No s’ha pogut crear la reserva',
+                        text: data.message || 'Revisa les dates i els dies seleccionats.',
+                        icon: 'error',
+                        confirmButtonColor: '#1a1a1a'
+                    });
                 }
             })
-            .catch(error => console.error('Error:', error));
+            .catch(error => {
+                console.error('Error:', error);
+                if (accio === 'crear') {
+                    Swal.fire({
+                        title: 'Error de connexió',
+                        text: 'No s’ha pogut crear la reserva. Torna-ho a provar.',
+                        icon: 'error',
+                        confirmButtonColor: '#1a1a1a'
+                    });
+                }
+            });
         }
 
         function actualitzarContadors(total) {
