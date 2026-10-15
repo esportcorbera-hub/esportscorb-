@@ -57,7 +57,7 @@ def inici(request):
     pendents = []
     num_pendents = 0
     es_tecnic = request.user.is_staff and not request.user.groups.filter(name='Conserge').exists()
-    entitats = list(User.objects.filter(is_active=True, is_staff=False).order_by('first_name', 'username')) if request.user.is_staff else []
+    entitats = list(User.objects.filter(is_active=True, is_staff=False).order_by('first_name', 'username')) if es_tecnic else []
     if es_tecnic:
         entitats.insert(0, request.user)
     conserges = [] # Llista buida per defecte
@@ -76,19 +76,17 @@ def inici(request):
         num_pendents = pendents.count()
         
         # OBTENIR ELS CONSERGES PER AL DESPLEGABLE
-        # Busquem el grup anomenat 'Conserge'
-        grup_conserge = Group.objects.filter(name='Conserge').first()
-        if grup_conserge:
-            conserges = grup_conserge.user_set.all().order_by('username')
+        # Només el tècnic obre el gestor d'horaris de consergeria.
+        if es_tecnic:
+            grup_conserge = Group.objects.filter(name='Conserge').first()
+            if grup_conserge:
+                conserges = grup_conserge.user_set.all().order_by('username')
 
     # 3. DADES GENERALS
     # Cerca aquesta línia dins de def inici(request):
     instalacions = Instalacio.objects.filter(parent__isnull=True).exclude(nom__icontains='personal esports').exclude(nom__icontains='extraordin').order_by('nom')
-    les_meves_reserves = Reserva.objects.filter(entitat=request.user).order_by('-inici')
-
     context = {
         'instalacions': instalacions,
-        'les_meves_reserves': les_meves_reserves,
         'pendents': pendents,
         'num_pendents': num_pendents,
         'conserges': conserges,  # <--- ARA SÍ: Arribarà al JS del SweetAlert
