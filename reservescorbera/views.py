@@ -1468,3 +1468,30 @@ def eliminar_horari_consergeria(request, pk):
     horari.actiu = False
     horari.save(update_fields=['actiu'])
     return JsonResponse({'status': 'ok', 'id': horari.id})
+
+@login_required
+def llista_horaris_assignats_consergeria(request):
+    if not _es_tecnic_consergeria(request.user):
+        return JsonResponse({'error': 'Només el tècnic pot consultar les assignacions.'}, status=403)
+    horaris = HorariConserge.objects.filter(actiu=True).select_related('conserge').order_by(
+        'conserge__first_name', 'conserge__username', 'data_inici', 'id'
+    )
+    return JsonResponse([
+        {
+            'id': h.id,
+            'persona': h.conserge.get_full_name() or h.conserge.username,
+            'torn': h.get_torn_display(),
+            'data_inici': h.data_inici.isoformat(),
+            'repeteix': h.repeteix_cada_quatre_setmanes,
+        }
+        for h in horaris
+    ], safe=False)
+
+
+@staff_member_required
+@require_POST
+def buidar_horaris_consergeria(request):
+    if not _es_tecnic_consergeria(request.user):
+        return JsonResponse({'error': 'Només el tècnic pot desassignar els horaris.'}, status=403)
+    afectats = HorariConserge.objects.filter(actiu=True).update(actiu=False)
+    return JsonResponse({'status': 'ok', 'afectats': afectats})

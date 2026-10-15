@@ -905,6 +905,70 @@ input, select, textarea, button { max-width: 100%; }
             });
         }
 
+        async function carregarHorarisConsergeria() {
+            const contenidor = document.getElementById('cons-horaris-assignats');
+            if (!contenidor) return;
+            contenidor.textContent = 'Carregant horaris...';
+            try {
+                const resposta = await fetch("{% url 'llista_horaris_assignats_consergeria' %}");
+                const horaris = await resposta.json();
+                if (!resposta.ok) throw new Error(horaris.error || 'No s’han pogut carregar els horaris.');
+                contenidor.replaceChildren();
+                if (!horaris.length) {
+                    const buit = document.createElement('div');
+                    buit.className = 'small text-muted py-2';
+                    buit.textContent = 'No hi ha cap horari assignat.';
+                    contenidor.appendChild(buit);
+                    return;
+                }
+                horaris.forEach(horari => {
+                    const fila = document.createElement('div');
+                    fila.className = 'd-flex justify-content-between align-items-center gap-2 border-bottom border-secondary py-2';
+                    const text = document.createElement('span');
+                    text.className = 'small text-start';
+                    const data = new Intl.DateTimeFormat('ca-ES').format(new Date(horari.data_inici + 'T00:00:00'));
+                    text.textContent = horari.persona + ' · ' + horari.torn + ' · des del ' + data + ' · ' + (horari.repeteix ? 'rotació cada 4 setmanes' : 'una setmana');
+                    const boto = document.createElement('button');
+                    boto.type = 'button';
+                    boto.className = 'btn btn-sm btn-outline-danger flex-shrink-0';
+                    boto.textContent = 'Eliminar';
+                    boto.addEventListener('click', () => eliminarHorariConserge(horari.id));
+                    fila.append(text, boto);
+                    contenidor.appendChild(fila);
+                });
+            } catch (error) {
+                contenidor.textContent = error.message;
+            }
+        }
+
+        async function buidarHorarisConsergeria() {
+            const confirmacio = await Swal.fire({
+                title: 'Desactivar tots els horaris?',
+                text: 'Deixaran d’aparèixer al calendari. Es conservaran l’historial i les reserves.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Desactivar tots',
+                confirmButtonColor: '#dc3545',
+                cancelButtonText: 'Cancel·lar'
+            });
+            if (!confirmacio.isConfirmed) return;
+            const dades = new FormData();
+            dades.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+            try {
+                const resposta = await fetch("{% url 'buidar_horaris_consergeria' %}", { method: 'POST', body: dades });
+                const resultat = await resposta.json();
+                if (!resposta.ok) throw new Error(resultat.error || 'No s’han pogut desactivar els horaris.');
+                await Swal.fire({
+                    title: 'Horaris desactivats',
+                    text: 'S’han desactivat ' + resultat.afectats + ' assignacions. Les reserves i l’historial es conserven.',
+                    icon: 'success',
+                    confirmButtonColor: '#d4af37'
+                });
+                window.location.reload();
+            } catch (error) {
+                Swal.fire({ title: 'No s’han pogut desactivar', text: error.message, icon: 'error', confirmButtonColor: '#d4af37' });
+            }
+        }
         function obrirGestioConserges() {
             Swal.fire({
                 title: 'GESTIÓ D’HORARIS DE CONSERGERIA',
@@ -947,7 +1011,10 @@ input, select, textarea, button { max-width: 100%; }
                         </div>
 
                         <hr style="border-color:#555">
-                        <div class="small fw-bold mb-2" style="color:#d4af37">Horaris assignats</div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="small fw-bold" style="color:#d4af37">Horaris assignats</div>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="buidarHorarisConsergeria()">Desactivar tots</button>
+                        </div>
                         <div id="cons-horaris-assignats" class="conserge-shift-list">
                             {% for h in horaris_conserges %}
                             <div id="horari-conserge-{{ h.id }}" class="d-flex justify-content-between align-items-center gap-2 border-bottom border-secondary py-2">
@@ -964,6 +1031,7 @@ input, select, textarea, button { max-width: 100%; }
                 confirmButtonText: 'Assignar horari',
                 confirmButtonColor: '#d4af37',
                 cancelButtonText: 'Tancar',
+                didOpen: () => carregarHorarisConsergeria(),
                 preConfirm: () => {
                     const consergeId = document.getElementById('cons-nom').value;
                     const torn = document.getElementById('cons-torn').value;

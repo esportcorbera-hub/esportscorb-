@@ -48,6 +48,8 @@ urlpatterns = [
     path('api/reserves/', views.api_reserves, name='api_reserves'),
     path('api/horaris-consergeria/', views.api_horaris_consergeria, name='api_horaris_consergeria'),
     path('api/horaris-consergeria/assignar/', views.assignar_horari_consergeria, name='assignar_horari_consergeria'),
+    path('api/horaris-consergeria/assignacions/', views.llista_horaris_assignats_consergeria, name='llista_horaris_assignats_consergeria'),
+    path('api/horaris-consergeria/buidar/', views.buidar_horaris_consergeria, name='buidar_horaris_consergeria'),
     path('api/horaris-consergeria/eliminar/<int:pk>/', views.eliminar_horari_consergeria, name='eliminar_horari_consergeria'),
     path('api/hores-ocupades/', views.api_hores_ocupades, name='api_hores_ocupades'),
 
