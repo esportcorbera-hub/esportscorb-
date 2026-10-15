@@ -1317,6 +1317,14 @@ TORNS_CONSERGERIA = {
     },
 }
 
+# Cada persona conserva aquest ordre de rotació a partir del torn assignat.
+ROTACIO_TORNS_CONSERGERIA = {
+    'A': ('A', 'D', 'B', 'C'),
+    'B': ('B', 'C', 'A', 'D'),
+    'C': ('C', 'B', 'D', 'A'),
+    'D': ('D', 'A', 'C', 'B'),
+}
+
 
 def _es_tecnic_consergeria(user):
     return user.is_staff and not user.groups.filter(name='Conserge').exists()
@@ -1354,23 +1362,41 @@ def api_horaris_consergeria(request):
     horaris = HorariConserge.objects.filter(
         actiu=True,
         data_inici__lt=data_final
-    ).select_related('conserge').order_by('conserge__first_name', 'conserge__username')
+    ).select_related('conserge').order_by(
+        'conserge_id', 'data_inici', 'creat_el', 'id'
+    )
+
+    # Les assignacions més recents d'una persona substitueixen les anteriors
+    # des de la seva data d'inici, sense esborrar-ne l'historial.
+    horaris_per_conserge = {}
+    for horari in horaris:
+        horaris_per_conserge.setdefault(horari.conserge_id, []).append(horari)
 
     resultats = []
     nombre_dies = (data_final - data_inici).days
-    for horari in horaris:
-        patro = TORNS_CONSERGERIA.get(horari.torn)
-        if not patro:
-            continue
-        for offset in range(nombre_dies):
-            data = data_inici + timedelta(days=offset)
-            if data < horari.data_inici:
+    for offset in range(nombre_dies):
+        data = data_inici + timedelta(days=offset)
+        for horaris_persona in horaris_per_conserge.values():
+            horari = next(
+                (item for item in reversed(horaris_persona) if item.data_inici <= data),
+                None,
+            )
+            if not horari:
                 continue
+
             setmana = (data - horari.data_inici).days // 7
             if horari.repeteix_cada_quatre_setmanes:
-                if setmana % 4 != 0:
+                seq = ROTACIO_TORNS_CONSERGERIA.get(horari.torn)
+                if not seq:
                     continue
-            elif setmana != 0:
+                torn_actual = seq[(setmana // 4) % len(seq)]
+            else:
+                if setmana != 0:
+                    continue
+                torn_actual = horari.torn
+
+            patro = TORNS_CONSERGERIA.get(torn_actual)
+            if not patro:
                 continue
             franja = patro['dies'].get(data.weekday())
             if not franja:
@@ -1408,6 +1434,16 @@ def assignar_horari_consergeria(request):
         return JsonResponse({'error': 'Selecciona un conserge vàlid.'}, status=400)
     if torn not in TORNS_CONSERGERIA:
         return JsonResponse({'error': 'Selecciona un dels quatre torns disponibles.'}, status=400)
+
+    if HorariConserge.objects.filter(
+        conserge=conserge,
+        data_inici=data_inici,
+        actiu=True,
+    ).exists():
+        return JsonResponse(
+            {'error': 'Aquest conserge ja té un horari assignat per a aquesta data.'},
+            status=409,
+        )
 
     repeteix = request.POST.get('repeteix_cada_quatre_setmanes') == '1'
     horari, creat = HorariConserge.objects.get_or_create(
