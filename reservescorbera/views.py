@@ -6,6 +6,7 @@ from django.contrib.auth.models import User, Group
 from django.http import JsonResponse, Http404
 from django.contrib import messages
 from django.utils import timezone
+from django.db import IntegrityError
 from django.db.models import Q  
 from datetime import datetime
 from .models import Instalacio, Reserva, PlantillaReserva, ActivitatExtra, HorariConserge
@@ -1409,13 +1410,16 @@ def assignar_horari_consergeria(request):
     if HorariConserge.objects.filter(conserge=conserge, actiu=True).exists():
         return JsonResponse({'error': 'Aquest conserge ja té un horari assignat. Elimina’l abans d’assignar-ne un de nou.'}, status=409)
 
-    horari = HorariConserge.objects.create(
-        conserge=conserge,
-        torn=torn,
-        data_inici=data_inici,
-        repeteix_cada_quatre_setmanes=True,
-        actiu=True,
-    )
+    try:
+        horari = HorariConserge.objects.create(
+            conserge=conserge,
+            torn=torn,
+            data_inici=data_inici,
+            repeteix_cada_quatre_setmanes=True,
+            actiu=True,
+        )
+    except IntegrityError:
+        return JsonResponse({'error': 'Aquest conserge ja té un horari assignat. Elimina’l abans d’assignar-ne un de nou.'}, status=409)
     return JsonResponse(_serialitzar_horari_conserge(horari), status=201)
 
 
