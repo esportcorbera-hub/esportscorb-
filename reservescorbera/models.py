@@ -104,8 +104,8 @@ class HorariConserge(models.Model):
         ordering = ['data_inici', 'conserge__first_name', 'conserge__username']
         constraints = [
             models.UniqueConstraint(
-                fields=['conserge', 'torn', 'data_inici'],
-                name='unique_horari_conserge_torn_data'
+                fields=['conserge'],
+                name='unique_horari_conserge'
             )
         ]
 
