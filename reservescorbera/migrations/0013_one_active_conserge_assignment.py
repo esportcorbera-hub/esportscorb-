@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RemoveConstraint(
-            model_name="horaricons erge".replace(" ", ""),
+            model_name="horariconserge",
             name="unique_horari_conserge_torn_data",
         ),
         migrations.AddConstraint(
