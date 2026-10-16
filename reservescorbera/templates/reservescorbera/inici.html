@@ -226,7 +226,6 @@ input, select, textarea, button { max-width: 100%; }
     .horaris-consergeria-dia { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; white-space: normal; }
     .horari-conserge-etiqueta { display: block; border-left: 3px solid #d4af37; border-radius: 3px; background: #fff8dc; color: #292929; padding: 2px 4px; font-size: .68rem; line-height: 1.2; font-weight: 600; text-align: left; }
     .fc-col-header-cell-cushion { white-space: normal !important; }
-    .conserge-shift-list { max-height: 180px; overflow-y: auto; }
 </style>
 </head>
 <body>
@@ -295,16 +294,6 @@ input, select, textarea, button { max-width: 100%; }
             </div>
         {% endif %}
 
-        <!-- BLOC D'ACCIONS DE STAFF -->
-        {% if user.is_staff and not user.groups.all.0.name == "Conserge" %}
-            <div class="d-flex gap-2">
-                <!-- Botó existent de Gestió -->
-                <button onclick="obrirGestioConserges()" class="btn fw-bold shadow-sm" style="background: #1a1a1a; color: #d4af37; border: 2px solid #d4af37; border-radius: 8px; font-size: 0.8rem;">
-                    <i class="bi bi-people-fill me-1"></i> GESTIÓ CONSERGERIA
-                </button>
-
-            </div>
-        {% endif %}
         
         <div class="d-flex align-items-center gap-3 ms-auto"> <!-- ms-auto l'empeny a la dreta -->
             <a href="{% url 'gestionar_reserves' %}" class="btn fw-bold shadow-sm d-flex align-items-center" 
@@ -905,185 +894,7 @@ input, select, textarea, button { max-width: 100%; }
             });
         }
 
-        async function carregarHorarisConsergeria() {
-            const contenidor = document.getElementById('cons-horaris-assignats');
-            if (!contenidor) return;
-            contenidor.textContent = 'Carregant horaris...';
-            try {
-                const resposta = await fetch("{% url 'llista_horaris_assignats_consergeria' %}");
-                const horaris = await resposta.json();
-                if (!resposta.ok) throw new Error(horaris.error || 'No s’han pogut carregar els horaris.');
-                contenidor.replaceChildren();
-                if (!horaris.length) {
-                    const buit = document.createElement('div');
-                    buit.className = 'small text-muted py-2';
-                    buit.textContent = 'No hi ha cap horari assignat.';
-                    contenidor.appendChild(buit);
-                    return;
-                }
-                horaris.forEach(horari => {
-                    const fila = document.createElement('div');
-                    fila.className = 'd-flex justify-content-between align-items-center gap-2 border-bottom border-secondary py-2';
-                    const text = document.createElement('span');
-                    text.className = 'small text-start';
-                    const data = new Intl.DateTimeFormat('ca-ES').format(new Date(horari.data_inici + 'T00:00:00'));
-                    text.textContent = horari.persona + ' · ' + horari.torn + ' · des del ' + data + ' · ' + (horari.repeteix ? 'rotació cada 4 setmanes' : 'una setmana');
-                    const boto = document.createElement('button');
-                    boto.type = 'button';
-                    boto.className = 'btn btn-sm btn-outline-danger flex-shrink-0';
-                    boto.textContent = 'Eliminar';
-                    boto.addEventListener('click', () => eliminarHorariConserge(horari.id));
-                    fila.append(text, boto);
-                    contenidor.appendChild(fila);
-                });
-            } catch (error) {
-                contenidor.textContent = error.message;
-            }
-        }
 
-        async function buidarHorarisConsergeria() {
-            const confirmacio = await Swal.fire({
-                title: 'Desactivar tots els horaris?',
-                text: 'Deixaran d’aparèixer al calendari. Es conservaran l’historial i les reserves.',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: 'Desactivar tots',
-                confirmButtonColor: '#dc3545',
-                cancelButtonText: 'Cancel·lar'
-            });
-            if (!confirmacio.isConfirmed) return;
-            const dades = new FormData();
-            dades.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-            try {
-                const resposta = await fetch("{% url 'buidar_horaris_consergeria' %}", { method: 'POST', body: dades });
-                const resultat = await resposta.json();
-                if (!resposta.ok) throw new Error(resultat.error || 'No s’han pogut desactivar els horaris.');
-                await Swal.fire({
-                    title: 'Horaris desactivats',
-                    text: 'S’han desactivat ' + resultat.afectats + ' assignacions. Les reserves i l’historial es conserven.',
-                    icon: 'success',
-                    confirmButtonColor: '#d4af37'
-                });
-                window.location.reload();
-            } catch (error) {
-                Swal.fire({ title: 'No s’han pogut desactivar', text: error.message, icon: 'error', confirmButtonColor: '#d4af37' });
-            }
-        }
-        function obrirGestioConserges() {
-            Swal.fire({
-                title: 'GESTIÓ D’HORARIS DE CONSERGERIA',
-                background: '#1a1a1a',
-                color: '#fff',
-                width: 650,
-                html: `
-                    <div class="text-start">
-                        <label class="small fw-bold" style="color:#d4af37">Conserge:</label>
-                        <select id="cons-nom" class="form-select mb-3" style="background:#222;color:white;border:1px solid #444">
-                            <option value="">Tria un conserge</option>
-                            {% for c in conserges %}
-                            <option value="{{ c.id }}">{{ c.get_full_name|default:c.username }}</option>
-                            {% empty %}
-                            <option value="" disabled>No hi ha conserges creats</option>
-                            {% endfor %}
-                        </select>
-
-                        <label class="small fw-bold" style="color:#d4af37">Torn:</label>
-                        <select id="cons-torn" class="form-select mb-3" style="background:#222;color:white;border:1px solid #444">
-                            <option value="A">A · Exterior 1 · Dl-Dt 14:30–23:15 · Ds-Dg 09:00–21:00</option>
-                            <option value="B">B · Pavelló 1 · Dl-Dt 14:30–24:00 · Ds 08:00–21:30 · Dg 09:00–20:30</option>
-                            <option value="C">C · Exterior 2 · Dc-Dv 14:30–23:15</option>
-                            <option value="D">D · Pavelló 2 · Dc-Dv 14:30–24:00</option>
-                        </select>
-
-                        <label class="small fw-bold" style="color:#d4af37">Data d’inici del torn:</label>
-                        <input id="cons-data-inici" type="date" class="form-control mb-3" style="background:#222;color:white;border:1px solid #444" value="${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}">
-
-                        <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" id="cons-repeticio" checked>
-                            <label class="form-check-label small" for="cons-repeticio">Rotar de torn cada 4 setmanes indefinidament</label>
-                        </div>
-                        <div class="small text-white-50 mb-3">
-                            El torn seleccionat és el punt d’inici. Cada torn dura quatre setmanes i després segueix aquest cicle:
-                            <div class="mt-1">Exterior 1 → Pavelló 2 → Pavelló 1 → Exterior 2</div>
-                            <div>Pavelló 1 → Exterior 2 → Exterior 1 → Pavelló 2</div>
-                            <div>Exterior 2 → Pavelló 1 → Pavelló 2 → Exterior 1</div>
-                            <div>Pavelló 2 → Exterior 1 → Exterior 2 → Pavelló 1</div>
-                        </div>
-
-                        <hr style="border-color:#555">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <div class="small fw-bold" style="color:#d4af37">Horaris assignats</div>
-                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="buidarHorarisConsergeria()">Desactivar tots</button>
-                        </div>
-                        <div id="cons-horaris-assignats" class="conserge-shift-list">
-                            {% for h in horaris_conserges %}
-                            <div id="horari-conserge-{{ h.id }}" class="d-flex justify-content-between align-items-center gap-2 border-bottom border-secondary py-2">
-                                <span class="small text-start">{{ h.conserge.get_full_name|default:h.conserge.username }} · {{ h.get_torn_display }} · des del {{ h.data_inici|date:"d/m/Y" }} · {% if h.repeteix_cada_quatre_setmanes %}rotació cada 4 setmanes{% else %}una setmana{% endif %}</span>
-                                <button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0" onclick="eliminarHorariConserge({{ h.id }})">Eliminar</button>
-                            </div>
-                            {% empty %}
-                            <div id="cons-horaris-buits" class="small text-muted py-2">Encara no hi ha horaris assignats.</div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                `,
-                showCancelButton: true,
-                confirmButtonText: 'Assignar horari',
-                confirmButtonColor: '#d4af37',
-                cancelButtonText: 'Tancar',
-                didOpen: () => carregarHorarisConsergeria(),
-                preConfirm: () => {
-                    const consergeId = document.getElementById('cons-nom').value;
-                    const torn = document.getElementById('cons-torn').value;
-                    const dataInici = document.getElementById('cons-data-inici').value;
-                    const repeteix = document.getElementById('cons-repeticio').checked;
-                    if (!consergeId) return Swal.showValidationMessage('Selecciona un conserge');
-                    if (!dataInici) return Swal.showValidationMessage('Indica la data d’inici');
-                    return { consergeId, torn, dataInici, repeteix };
-                }
-            }).then(async result => {
-                if (!result.isConfirmed) return;
-                const dades = new FormData();
-                dades.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-                dades.append('conserge_id', result.value.consergeId);
-                dades.append('torn', result.value.torn);
-                dades.append('data_inici', result.value.dataInici);
-                dades.append('repeteix_cada_quatre_setmanes', result.value.repeteix ? '1' : '0');
-                try {
-                    const resposta = await fetch("{% url 'assignar_horari_consergeria' %}", { method: 'POST', body: dades });
-                    const dadesResposta = await resposta.json();
-                    if (!resposta.ok) throw new Error(dadesResposta.error || 'No s’ha pogut assignar l’horari.');
-                    await Swal.fire({ title: 'Horari assignat', text: 'S’ha afegit al calendari de consergeria.', icon: 'success', confirmButtonColor: '#d4af37' });
-                    window.location.reload();
-                } catch (error) {
-                    Swal.fire({ title: 'No s’ha pogut assignar', text: error.message, icon: 'error', confirmButtonColor: '#d4af37' });
-                }
-            });
-        }
-
-        function eliminarHorariConserge(id) {
-            Swal.fire({
-                title: 'Eliminar aquest horari?',
-                text: 'Deixarà d’aparèixer al calendari des d’ara.',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: 'Eliminar',
-                confirmButtonColor: '#dc3545',
-                cancelButtonText: 'Cancel·lar'
-            }).then(async result => {
-                if (!result.isConfirmed) return;
-                const dades = new FormData();
-                dades.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-                try {
-                    const resposta = await fetch(`/api/horaris-consergeria/eliminar/${id}/`, { method: 'POST', body: dades });
-                    const dadesResposta = await resposta.json();
-                    if (!resposta.ok) throw new Error(dadesResposta.error || 'No s’ha pogut eliminar l’horari.');
-                    window.location.reload();
-                } catch (error) {
-                    Swal.fire({ title: 'No s’ha pogut eliminar', text: error.message, icon: 'error', confirmButtonColor: '#d4af37' });
-                }
-            });
-        }
     </script>
 <!-- REEMPLAÇA DES D'AQUÍ FINS AL FINAL DEL DOCUMENT -->
 {% if messages %}
