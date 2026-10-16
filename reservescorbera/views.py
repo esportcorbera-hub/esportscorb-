@@ -1367,7 +1367,7 @@ def api_horaris_consergeria(request):
             seq = ROTACIO_TORNS_CONSERGERIA.get(assignacio.torn)
             if not seq:
                 continue
-            torn_actual = seq[(setmanes // 4) % len(seq)]
+            torn_actual = seq[setmanes % len(seq)]
             patro = TORNS_CONSERGERIA.get(torn_actual)
             if not patro:
                 continue
