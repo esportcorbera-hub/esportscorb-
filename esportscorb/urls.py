@@ -46,7 +46,6 @@ urlpatterns = [
     path('eliminar-reserva-entitat/', views.eliminar_reserva_entitat, name='eliminar_reserva_entitat'),
     # APIs
     path('api/reserves/', views.api_reserves, name='api_reserves'),
-    path('api/horaris-consergeria/', views.api_horaris_consergeria, name='api_horaris_consergeria'),
     path('api/hores-ocupades/', views.api_hores_ocupades, name='api_hores_ocupades'),
 
 
