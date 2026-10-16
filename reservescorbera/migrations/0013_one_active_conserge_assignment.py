@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
             name="unique_horari_conserge_torn_data",
         ),
         migrations.AddConstraint(
-            model_name="horaricons erge".replace(" ", ""),
+            model_name="horariconserge",
             constraint=models.UniqueConstraint(
                 fields=("conserge",),
                 name="unique_horari_conserge",
