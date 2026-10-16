@@ -919,7 +919,7 @@ input, select, textarea, button { max-width: 100%; }
                     const text = document.createElement('span');
                     text.className = 'small text-start';
                     const data = new Intl.DateTimeFormat('ca-ES').format(new Date(horari.data_inici + 'T00:00:00'));
-                    text.textContent = horari.persona + ' · ' + horari.torn + ' · des del ' + data + ' · rotació cada 4 setmanes';
+                    text.textContent = horari.persona + ' · ' + horari.torn + ' · des del ' + data + ' · rotació setmanal';
                     const boto = document.createElement('button');
                     boto.type = 'button';
                     boto.className = 'btn btn-sm btn-outline-danger flex-shrink-0';
@@ -983,7 +983,7 @@ input, select, textarea, button { max-width: 100%; }
                         </select>
                         <label class="small fw-bold" style="color:#d4af37">Data d’inici:</label>
                         <input id="cons-data-inici" type="date" class="form-control mb-3" style="background:#222;color:white;border:1px solid #444" value="${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}">
-                        <p class="small text-white-50">El torn inicial es repetirà amb rotació cada quatre setmanes, indefinidament.</p>
+                        <p class="small text-white-50">El conserge canviarà de torn cada setmana seguint l’ordre indicat, indefinidament.</p>
                         <div class="small text-white-50 mb-3">
                             Exterior 1 → Pavelló 2 → Pavelló 1 → Exterior 2<br>
                             Pavelló 1 → Exterior 2 → Exterior 1 → Pavelló 2<br>
