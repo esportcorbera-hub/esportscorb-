@@ -222,11 +222,7 @@ input, select, textarea, button { max-width: 100%; }
 }
 </style>
 
-<style id="conserge-shift-labels">
-    .horaris-consergeria-dia { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; white-space: normal; }
-    .horari-conserge-etiqueta { display: block; border-left: 3px solid #d4af37; border-radius: 3px; background: #fff8dc; color: #292929; padding: 2px 4px; font-size: .68rem; line-height: 1.2; font-weight: 600; text-align: left; }
-    .fc-col-header-cell-cushion { white-space: normal !important; }
-</style>
+
 </head>
 <body>
 
@@ -377,7 +373,6 @@ input, select, textarea, button { max-width: 100%; }
 
     <script>
         let calendar;
-        let horarisConsergeriaPerDia = {};
         // Constants de Rol
         const esConserge = "{{ user.groups.all.0.name }}" === "Conserge";
         const esStaff = "{{ user.is_staff }}" === "True";
@@ -492,9 +487,6 @@ input, select, textarea, button { max-width: 100%; }
                 },
                 buttonText: { today: 'Avui', month: 'Mes', week: 'Setmana', day: 'Dia' },
                 events: '/api/reserves/',
-                datesSet: function(info) { actualitzarHorarisConsergeria(info); },
-                dayHeaderDidMount: function() { requestAnimationFrame(renderHorarisConsergeria); },
-                dayCellDidMount: function() { requestAnimationFrame(renderHorarisConsergeria); },
                 
                 // --- LÒGICA D'EDICIÓ EN CLICAR ---
                 eventClick: function(info) {
@@ -852,47 +844,6 @@ input, select, textarea, button { max-width: 100%; }
             requestAnimationFrame(() => calendar.updateSize());
         }
 
-        function actualitzarHorarisConsergeria(info) {
-            if (!esConserge && !esTecnic) return Promise.resolve();
-            const params = new URLSearchParams({
-                start: info.startStr,
-                end: info.endStr
-            });
-            return fetch(`/api/horaris-consergeria/?${params.toString()}`)
-                .then(response => response.ok ? response.json() : [])
-                .then(horaris => {
-                    horarisConsergeriaPerDia = {};
-                    horaris.forEach(horari => {
-                        if (!horarisConsergeriaPerDia[horari.data]) horarisConsergeriaPerDia[horari.data] = [];
-                        horarisConsergeriaPerDia[horari.data].push(horari);
-                    });
-                    requestAnimationFrame(renderHorarisConsergeria);
-                })
-                .catch(error => console.error('No s’han pogut carregar els horaris de consergeria:', error));
-        }
-
-        function renderHorarisConsergeria() {
-            document.querySelectorAll('#calendar .horaris-consergeria-dia').forEach(element => element.remove());
-            const cel·les = document.querySelectorAll('#calendar .fc-col-header-cell[data-date], #calendar .fc-daygrid-day[data-date]');
-            cel·les.forEach(cella => {
-                const horaris = horarisConsergeriaPerDia[cella.dataset.date] || [];
-                if (!horaris.length) return;
-                const contenidor = cella.classList.contains('fc-col-header-cell')
-                    ? cella.querySelector('.fc-col-header-cell-cushion')?.parentElement
-                    : cella.querySelector('.fc-daygrid-day-top');
-                if (!contenidor) return;
-                const llista = document.createElement('div');
-                llista.className = 'horaris-consergeria-dia';
-                horaris.forEach(horari => {
-                    const etiqueta = document.createElement('span');
-                    etiqueta.className = 'horari-conserge-etiqueta';
-                    etiqueta.textContent = `${horari.persona} · ${horari.torn} · ${horari.inici}–${horari.final}`;
-                    etiqueta.title = `${horari.persona} — ${horari.torn} — ${horari.inici}–${horari.final}`;
-                    llista.appendChild(etiqueta);
-                });
-                contenidor.appendChild(llista);
-            });
-        }
 
 
     </script>
