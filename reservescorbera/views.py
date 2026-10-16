@@ -60,11 +60,6 @@ def inici(request):
     entitats = list(User.objects.filter(is_active=True, is_staff=False).order_by('first_name', 'username')) if es_tecnic else []
     if es_tecnic:
         entitats.insert(0, request.user)
-    conserges = [] # Llista buida per defecte
-    horaris_conserges = []
-    if es_tecnic:
-        horaris_conserges = HorariConserge.objects.filter(actiu=True).select_related('conserge')
-    
     if request.user.is_staff:
         ara = timezone.now()
         
@@ -75,13 +70,6 @@ def inici(request):
         ).order_by('inici')
         num_pendents = pendents.count()
         
-        # OBTENIR ELS CONSERGES PER AL DESPLEGABLE
-        # Només el tècnic obre el gestor d'horaris de consergeria.
-        if es_tecnic:
-            grup_conserge = Group.objects.filter(name='Conserge').first()
-            if grup_conserge:
-                conserges = grup_conserge.user_set.all().order_by('username')
-
     # 3. DADES GENERALS
     # Cerca aquesta línia dins de def inici(request):
     instalacions = Instalacio.objects.filter(parent__isnull=True).exclude(nom__icontains='personal esports').exclude(nom__icontains='extraordin').order_by('nom')
@@ -89,8 +77,6 @@ def inici(request):
         'instalacions': instalacions,
         'pendents': pendents,
         'num_pendents': num_pendents,
-        'conserges': conserges,  # <--- ARA SÍ: Arribarà al JS del SweetAlert
-        'horaris_conserges': horaris_conserges,
         'entitats': entitats,
         'es_tecnic': request.user.is_staff
     }
@@ -1330,16 +1316,6 @@ def _es_tecnic_consergeria(user):
     return user.is_staff and not user.groups.filter(name='Conserge').exists()
 
 
-def _serialitzar_horari_conserge(horari):
-    return {
-        'id': horari.id,
-        'persona': horari.conserge.get_full_name() or horari.conserge.username,
-        'torn': TORNS_CONSERGERIA[horari.torn]['nom'],
-        'data_inici': horari.data_inici.isoformat(),
-        'repeteix': horari.repeteix_cada_quatre_setmanes,
-    }
-
-
 @login_required
 def api_horaris_consergeria(request):
     es_conserge = request.user.groups.filter(name='Conserge').exists()
@@ -1411,87 +1387,3 @@ def api_horaris_consergeria(request):
             })
 
     return JsonResponse(resultats, safe=False)
-
-
-@staff_member_required
-@require_POST
-def assignar_horari_consergeria(request):
-    if not _es_tecnic_consergeria(request.user):
-        return JsonResponse({'error': 'Només el tècnic pot assignar horaris.'}, status=403)
-
-    conserge = User.objects.filter(
-        pk=request.POST.get('conserge_id'),
-        is_active=True,
-        groups__name='Conserge'
-    ).first()
-    torn = request.POST.get('torn', '')
-    try:
-        data_inici = datetime.strptime(request.POST.get('data_inici', ''), '%Y-%m-%d').date()
-    except (TypeError, ValueError):
-        return JsonResponse({'error': 'Indica una data d’inici vàlida.'}, status=400)
-
-    if not conserge:
-        return JsonResponse({'error': 'Selecciona un conserge vàlid.'}, status=400)
-    if torn not in TORNS_CONSERGERIA:
-        return JsonResponse({'error': 'Selecciona un dels quatre torns disponibles.'}, status=400)
-
-    if HorariConserge.objects.filter(
-        conserge=conserge,
-        data_inici=data_inici,
-        actiu=True,
-    ).exists():
-        return JsonResponse(
-            {'error': 'Aquest conserge ja té un horari assignat per a aquesta data.'},
-            status=409,
-        )
-
-    repeteix = request.POST.get('repeteix_cada_quatre_setmanes') == '1'
-    horari, creat = HorariConserge.objects.get_or_create(
-        conserge=conserge,
-        torn=torn,
-        data_inici=data_inici,
-        defaults={'repeteix_cada_quatre_setmanes': repeteix, 'actiu': True},
-    )
-    if not creat:
-        return JsonResponse({'error': 'Aquest horari ja està assignat a aquesta persona per a la data indicada.'}, status=409)
-
-    resposta = _serialitzar_horari_conserge(horari)
-    return JsonResponse(resposta, status=201)
-
-
-@staff_member_required
-@require_POST
-def eliminar_horari_consergeria(request, pk):
-    if not _es_tecnic_consergeria(request.user):
-        return JsonResponse({'error': 'Només el tècnic pot modificar els horaris.'}, status=403)
-    horari = get_object_or_404(HorariConserge, pk=pk, actiu=True)
-    horari.actiu = False
-    horari.save(update_fields=['actiu'])
-    return JsonResponse({'status': 'ok', 'id': horari.id})
-
-@login_required
-def llista_horaris_assignats_consergeria(request):
-    if not _es_tecnic_consergeria(request.user):
-        return JsonResponse({'error': 'Només el tècnic pot consultar les assignacions.'}, status=403)
-    horaris = HorariConserge.objects.filter(actiu=True).select_related('conserge').order_by(
-        'conserge__first_name', 'conserge__username', 'data_inici', 'id'
-    )
-    return JsonResponse([
-        {
-            'id': h.id,
-            'persona': h.conserge.get_full_name() or h.conserge.username,
-            'torn': h.get_torn_display(),
-            'data_inici': h.data_inici.isoformat(),
-            'repeteix': h.repeteix_cada_quatre_setmanes,
-        }
-        for h in horaris
-    ], safe=False)
-
-
-@staff_member_required
-@require_POST
-def buidar_horaris_consergeria(request):
-    if not _es_tecnic_consergeria(request.user):
-        return JsonResponse({'error': 'Només el tècnic pot desassignar els horaris.'}, status=403)
-    afectats = HorariConserge.objects.filter(actiu=True).update(actiu=False)
-    return JsonResponse({'status': 'ok', 'afectats': afectats})
