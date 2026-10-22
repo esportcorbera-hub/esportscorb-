@@ -1363,11 +1363,15 @@ def api_horaris_consergeria(request):
             if not assignacio:
                 continue
 
-            setmanes = (data - assignacio.data_inici).days // 7
+            # El cicle queda ancorat a setmanes completes (dilluns-diumenge).
+            # També normalitza assignacions antigues amb una data d'inici no dilluns.
+            inici_setmana = assignacio.data_inici - timedelta(days=assignacio.data_inici.weekday())
+            setmanes = (data - inici_setmana).days // 7
             seq = ROTACIO_TORNS_CONSERGERIA.get(assignacio.torn)
-            if not seq:
+            if not seq or len(seq) != 4:
                 continue
-            torn_actual = seq[setmanes % len(seq)]
+            # Quatre setmanes fixes; després el cicle torna a començar indefinidament.
+            torn_actual = seq[setmanes % 4]
             patro = TORNS_CONSERGERIA.get(torn_actual)
             if not patro:
                 continue
@@ -1403,12 +1407,14 @@ def assignar_horari_consergeria(request):
     except (TypeError, ValueError):
         return JsonResponse({'error': 'Indica una data d’inici vàlida.'}, status=400)
 
+    if data_inici.weekday() != 0:
+        return JsonResponse({'error': 'La data d’inici ha de ser dilluns perquè les quatre setmanes del cicle quedin alineades.'}, status=400)
     if not conserge:
         return JsonResponse({'error': 'Selecciona un conserge vàlid.'}, status=400)
     if torn not in TORNS_CONSERGERIA:
         return JsonResponse({'error': 'Selecciona un dels quatre torns disponibles.'}, status=400)
-    if HorariConserge.objects.filter(conserge=conserge, actiu=True).exists():
-        return JsonResponse({'error': 'Aquest conserge ja té un horari assignat. Elimina’l abans d’assignar-ne un de nou.'}, status=409)
+    if HorariConserge.objects.filter(conserge=conserge).exists():
+        return JsonResponse({'error': 'Aquest conserge ja té un horari guardat. Elimina’l abans de tornar-lo a assignar.'}, status=409)
 
     try:
         horari = HorariConserge.objects.create(
@@ -1419,7 +1425,7 @@ def assignar_horari_consergeria(request):
             actiu=True,
         )
     except IntegrityError:
-        return JsonResponse({'error': 'Aquest conserge ja té un horari assignat. Elimina’l abans d’assignar-ne un de nou.'}, status=409)
+        return JsonResponse({'error': 'Aquest conserge ja té un horari guardat. Elimina’l abans de tornar-lo a assignar.'}, status=409)
     return JsonResponse(_serialitzar_horari_conserge(horari), status=201)
 
 
