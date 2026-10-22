@@ -919,7 +919,7 @@ input, select, textarea, button { max-width: 100%; }
                     const text = document.createElement('span');
                     text.className = 'small text-start';
                     const data = new Intl.DateTimeFormat('ca-ES').format(new Date(horari.data_inici + 'T00:00:00'));
-                    text.textContent = horari.persona + ' · ' + horari.torn + ' · des del ' + data + ' · rotació setmanal';
+                    text.textContent = horari.persona + ' · ' + horari.torn + ' · des del ' + data + ' · cicle de 4 setmanes, indefinit';
                     const boto = document.createElement('button');
                     boto.type = 'button';
                     boto.className = 'btn btn-sm btn-outline-danger flex-shrink-0';
@@ -958,6 +958,14 @@ input, select, textarea, button { max-width: 100%; }
         }
 
         function obrirGestioConserges() {
+            const dillunsInici = new Date();
+            dillunsInici.setDate(dillunsInici.getDate() + ((8 - dillunsInici.getDay()) % 7));
+            const formatData = data => {
+                const any = data.getFullYear();
+                const mes = String(data.getMonth() + 1).padStart(2, '0');
+                const dia = String(data.getDate()).padStart(2, '0');
+                return `${any}-${mes}-${dia}`;
+            };
             Swal.fire({
                 title: 'GESTIÓ CONSERGERIA',
                 background: '#1a1a1a',
@@ -974,21 +982,21 @@ input, select, textarea, button { max-width: 100%; }
                             <option value="" disabled>No hi ha conserges creats</option>
                             {% endfor %}
                         </select>
-                        <label class="small fw-bold" style="color:#d4af37">Torn inicial:</label>
+                        <label class="small fw-bold" style="color:#d4af37">Torn inicial del cicle de 4 setmanes:</label>
                         <select id="cons-torn" class="form-select mb-3" style="background:#222;color:white;border:1px solid #444">
-                            <option value="A">A · Exterior 1 · Dl-Dt 14:30–23:15 · Ds-Dg 09:00–21:00</option>
-                            <option value="B">B · Pavelló 1 · Dl-Dt 14:30–24:00 · Ds 08:00–21:30 · Dg 09:00–20:30</option>
-                            <option value="C">C · Exterior 2 · Dc-Dv 14:30–23:15</option>
-                            <option value="D">D · Pavelló 2 · Dc-Dv 14:30–24:00</option>
+                            <option value="A">A · Exterior 1 → Pavelló 2 → Pavelló 1 → Exterior 2</option>
+                            <option value="B">B · Pavelló 1 → Exterior 2 → Exterior 1 → Pavelló 2</option>
+                            <option value="C">C · Exterior 2 → Pavelló 1 → Pavelló 2 → Exterior 1</option>
+                            <option value="D">D · Pavelló 2 → Exterior 1 → Exterior 2 → Pavelló 1</option>
                         </select>
-                        <label class="small fw-bold" style="color:#d4af37">Data d’inici:</label>
-                        <input id="cons-data-inici" type="date" class="form-control mb-3" style="background:#222;color:white;border:1px solid #444" value="${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}">
-                        <p class="small text-white-50">El conserge canviarà de torn cada setmana seguint l’ordre indicat, indefinidament.</p>
+                        <label class="small fw-bold" style="color:#d4af37">Dilluns d’inici del cicle:</label>
+                        <input id="cons-data-inici" type="date" class="form-control mb-3" style="background:#222;color:white;border:1px solid #444" value="${formatData(dillunsInici)}">
+                        <p class="small text-white-50">Cada torn s’aplica durant una setmana completa, de dilluns a diumenge. En acabar la quarta setmana, el cicle torna a començar i es repeteix indefinidament.</p>
                         <div class="small text-white-50 mb-3">
-                            Exterior 1 → Pavelló 2 → Pavelló 1 → Exterior 2<br>
-                            Pavelló 1 → Exterior 2 → Exterior 1 → Pavelló 2<br>
-                            Exterior 2 → Pavelló 1 → Pavelló 2 → Exterior 1<br>
-                            Pavelló 2 → Exterior 1 → Exterior 2 → Pavelló 1
+                            Horaris: Exterior 1 · Dl-Dt 14:30–23:15 · Ds-Dg 09:00–21:00<br>
+                            Pavelló 1 · Dl-Dt 14:30–24:00 · Ds 08:00–21:30 · Dg 09:00–20:30<br>
+                            Exterior 2 · Dc-Dv 14:30–23:15<br>
+                            Pavelló 2 · Dc-Dv 14:30–24:00
                         </div>
                         <hr style="border-color:#555">
                         <div class="d-flex justify-content-between align-items-center mb-2">
@@ -998,7 +1006,7 @@ input, select, textarea, button { max-width: 100%; }
                         <div id="cons-horaris-assignats" class="conserge-shift-list"></div>
                     </div>`,
                 showCancelButton: true,
-                confirmButtonText: 'Assignar horari',
+                confirmButtonText: 'Assignar cicle',
                 confirmButtonColor: '#d4af37',
                 cancelButtonText: 'Tancar',
                 didOpen: carregarHorarisConsergeria,
@@ -1007,7 +1015,8 @@ input, select, textarea, button { max-width: 100%; }
                     const torn = document.getElementById('cons-torn').value;
                     const dataInici = document.getElementById('cons-data-inici').value;
                     if (!consergeId) return Swal.showValidationMessage('Selecciona un conserge');
-                    if (!dataInici) return Swal.showValidationMessage('Indica la data d’inici');
+                    if (!dataInici) return Swal.showValidationMessage('Indica el dilluns d’inici del cicle');
+                    if (new Date(dataInici + 'T00:00:00').getDay() !== 1) return Swal.showValidationMessage('La data d’inici ha de ser dilluns');
                     return { consergeId, torn, dataInici };
                 }
             }).then(async result => {
@@ -1021,7 +1030,7 @@ input, select, textarea, button { max-width: 100%; }
                     const resposta = await fetch("{% url 'assignar_horari_consergeria' %}", { method: 'POST', body: dades });
                     const dadesResposta = await resposta.json();
                     if (!resposta.ok) throw new Error(dadesResposta.error || 'No s’ha pogut assignar l’horari.');
-                    await Swal.fire({ title: 'Horari assignat', text: 'S’ha afegit al calendari intern.', icon: 'success', confirmButtonColor: '#d4af37' });
+                    await Swal.fire({ title: 'Cicle assignat', text: 'S’ha assignat el cicle de quatre setmanes i es repetirà indefinidament al calendari intern.', icon: 'success', confirmButtonColor: '#d4af37' });
                     window.location.reload();
                 } catch (error) {
                     Swal.fire({ title: 'No s’ha pogut assignar', text: error.message, icon: 'error', confirmButtonColor: '#d4af37' });
