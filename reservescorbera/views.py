@@ -6,7 +6,7 @@ from django.contrib.auth.models import User, Group
 from django.http import JsonResponse, Http404
 from django.contrib import messages
 from django.utils import timezone
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Q  
 from datetime import datetime
 from .models import Instalacio, Reserva, PlantillaReserva, ActivitatExtra, HorariConserge
@@ -1413,19 +1413,23 @@ def assignar_horari_consergeria(request):
         return JsonResponse({'error': 'Selecciona un conserge vàlid.'}, status=400)
     if torn not in TORNS_CONSERGERIA:
         return JsonResponse({'error': 'Selecciona un dels quatre torns disponibles.'}, status=400)
-    if HorariConserge.objects.filter(conserge=conserge).exists():
-        return JsonResponse({'error': 'Aquest conserge ja té un horari guardat. Elimina’l abans de tornar-lo a assignar.'}, status=409)
+    if HorariConserge.objects.filter(conserge=conserge, actiu=True).exists():
+        return JsonResponse({'error': 'Aquest conserge ja té un horari assignat. Elimina’l abans de tornar-lo a assignar.'}, status=409)
 
     try:
-        horari = HorariConserge.objects.create(
-            conserge=conserge,
-            torn=torn,
-            data_inici=data_inici,
-            repeteix_cada_quatre_setmanes=True,
-            actiu=True,
-        )
+        with transaction.atomic():
+            # Les assignacions inactives antigues poden retenir la restricció única
+            # i impedir una nova assignació, tot i no aparèixer al calendari.
+            HorariConserge.objects.filter(conserge=conserge, actiu=False).delete()
+            horari = HorariConserge.objects.create(
+                conserge=conserge,
+                torn=torn,
+                data_inici=data_inici,
+                repeteix_cada_quatre_setmanes=True,
+                actiu=True,
+            )
     except IntegrityError:
-        return JsonResponse({'error': 'Aquest conserge ja té un horari guardat. Elimina’l abans de tornar-lo a assignar.'}, status=409)
+        return JsonResponse({'error': 'Aquest conserge ja té un horari assignat. Elimina’l abans de tornar-lo a assignar.'}, status=409)
     return JsonResponse(_serialitzar_horari_conserge(horari), status=201)
 
 
