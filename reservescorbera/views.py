@@ -1305,10 +1305,11 @@ TORNS_CONSERGERIA = {
 }
 
 ROTACIO_TORNS_CONSERGERIA = {
-    'A': ('A', 'D', 'B', 'C'),
-    'B': ('B', 'C', 'A', 'D'),
-    'C': ('C', 'B', 'D', 'A'),
-    'D': ('D', 'A', 'C', 'B'),
+    # Cada fila fixa l’ordre de les quatre setmanes i es repeteix indefinidament.
+    'A': ('A', 'C', 'B', 'D'),
+    'B': ('B', 'D', 'A', 'C'),
+    'C': ('C', 'A', 'D', 'B'),
+    'D': ('D', 'B', 'C', 'A'),
 }
 
 
