@@ -917,7 +917,7 @@ def aplicar_plantilla_al_calendari(request):
         data_fi_str = request.GET.get('data_fi')
 
         try:
-            data_inici = datetime.strptime(data_inici_str, '%Y-%m-%d').date() if data_inici_str else timezone.localdate()
+            data_inici = datetime.strptime(data_inici_str, '%Y-%m-%d').date() if data_inici_str else timezone.now().date()
             data_fi = datetime.strptime(data_fi_str, '%Y-%m-%d').date() if data_fi_str else data_inici + timedelta(days=6 - data_inici.weekday())
         except ValueError:
             messages.error(request, "Les dates del període no són vàlides.")
