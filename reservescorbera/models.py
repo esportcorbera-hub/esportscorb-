@@ -53,6 +53,8 @@ class Reserva(models.Model):
     
     # Data de creació per saber quan es va demanar
     creat_el = models.DateTimeField(auto_now_add=True)
+    # Només les reserves creades en aplicar una plantilla es poden substituir en reaplicar-la.
+    origen_plantilla = models.BooleanField(default=False, db_index=True)
 
     def __str__(self):
         return f"{self.activitat} - {self.instalacio.nom} ({self.entitat.username})"
