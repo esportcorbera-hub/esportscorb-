@@ -932,55 +932,45 @@ def aplicar_plantilla_al_calendari(request):
         ).exclude(
             instalacio__nom__icontains='extraordin'
         ))
+
         creades = 0
-        ja_existien = 0
+        eliminades = 0
+        # Substituïm exclusivament ocurrències creades en aplicacions de plantilla.
+        # Les reserves manuals i les fetes per entitats no tenen aquest indicador.
+        with transaction.atomic():
+            _, detalls = Reserva.objects.filter(
+                origen_plantilla=True,
+                inici__date__range=(data_inici, data_fi),
+            ).delete()
+            eliminades = detalls.get('reservescorbera.Reserva', 0)
 
-        for dies_des_de_l_inici in range((data_fi - data_inici).days + 1):
-            data_reserva = data_inici + timedelta(days=dies_des_de_l_inici)
-            for item in plantilla:
-                if item.dia_setmana != data_reserva.weekday():
-                    continue
+            for dies_des_de_l_inici in range((data_fi - data_inici).days + 1):
+                data_reserva = data_inici + timedelta(days=dies_des_de_l_inici)
+                for item in plantilla:
+                    if item.dia_setmana != data_reserva.weekday():
+                        continue
 
-                dt_inici = timezone.make_aware(datetime.combine(data_reserva, item.inici))
-                dt_final = timezone.make_aware(datetime.combine(data_reserva, item.final))
-                nom_usuari = item.user.username.upper()
-                activitat = f"{nom_usuari}: {item.activitat}"
+                    dt_inici = timezone.make_aware(datetime.combine(data_reserva, item.inici))
+                    dt_final = timezone.make_aware(datetime.combine(data_reserva, item.final))
+                    nom_usuari = item.user.username.upper()
+                    activitat = f"{nom_usuari}: {item.activitat}"
 
-                # Una aplicació de plantilla pot coincidir amb altres reserves:
-                # el tècnic pot programar solapaments. Només evitem duplicar
-                # exactament la mateixa ocurrència si s'aplica el període un altre cop.
-                ja_creada = Reserva.objects.filter(
-                    entitat=item.user,
-                    instalacio=item.instalacio,
-                    inici=dt_inici,
-                    final=dt_final,
-                    activitat=activitat
-                ).exclude(estat='rebutjada').exists()
+                    Reserva.objects.create(
+                        entitat=item.user,
+                        instalacio=item.instalacio,
+                        inici=dt_inici,
+                        final=dt_final,
+                        activitat=activitat,
+                        estat='validada',
+                        origen_plantilla=True,
+                    )
+                    creades += 1
 
-                if ja_creada:
-                    ja_existien += 1
-                    continue
-
-                Reserva.objects.create(
-                    entitat=item.user,
-                    instalacio=item.instalacio,
-                    inici=dt_inici,
-                    final=dt_final,
-                    activitat=activitat,
-                    estat='validada'
-                )
-                creades += 1
-
-        if creades:
-            messages.success(
-                request,
-                f"✨ Plantilla aplicada del {data_inici.strftime('%d/%m/%Y')} al {data_fi.strftime('%d/%m/%Y')}: {creades} reserves creades i {ja_existien} ja existien."
-            )
-        else:
-            messages.info(
-                request,
-                f"No s'han creat reserves noves del {data_inici.strftime('%d/%m/%Y')} al {data_fi.strftime('%d/%m/%Y')}: les {ja_existien} ocurrències ja existien."
-            )
+        messages.success(
+            request,
+            f"Plantilla substituïda del {data_inici.strftime('%d/%m/%Y')} al {data_fi.strftime('%d/%m/%Y')}: "
+            f"{eliminades} reserves anteriors de plantilla eliminades i {creades} de noves creades."
+        )
 
     return redirect('inici')
 @login_required
