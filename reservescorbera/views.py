@@ -927,13 +927,12 @@ def aplicar_plantilla_al_calendari(request):
             messages.error(request, "La data final no pot ser anterior a la data inicial.")
             return redirect('inici')
 
-        plantilla = list(PlantillaReserva.objects.exclude(
+        plantilla = PlantillaReserva.objects.exclude(
             instalacio__nom__icontains='personal esports'
         ).exclude(
             instalacio__nom__icontains='extraordin'
-        ))
+        )
         creades = 0
-        ja_existien = 0
 
         for dies_des_de_l_inici in range((data_fi - data_inici).days + 1):
             data_reserva = data_inici + timedelta(days=dies_des_de_l_inici)
@@ -943,44 +942,26 @@ def aplicar_plantilla_al_calendari(request):
 
                 dt_inici = timezone.make_aware(datetime.combine(data_reserva, item.inici))
                 dt_final = timezone.make_aware(datetime.combine(data_reserva, item.final))
-                nom_usuari = item.user.username.upper()
-                activitat = f"{nom_usuari}: {item.activitat}"
 
-                # Una aplicació de plantilla pot coincidir amb altres reserves:
-                # el tècnic pot programar solapaments. Només evitem duplicar
-                # exactament la mateixa ocurrència si s'aplica el període un altre cop.
-                ja_creada = Reserva.objects.filter(
-                    entitat=item.user,
+                hi_ha_solapament = Reserva.objects.filter(
                     instalacio=item.instalacio,
-                    inici=dt_inici,
-                    final=dt_final,
-                    activitat=activitat
+                    inici__lt=dt_final,
+                    final__gt=dt_inici
                 ).exclude(estat='rebutjada').exists()
 
-                if ja_creada:
-                    ja_existien += 1
-                    continue
+                if not hi_ha_solapament:
+                    nom_usuari = item.user.username.upper()
+                    Reserva.objects.create(
+                        entitat=item.user,
+                        instalacio=item.instalacio,
+                        inici=dt_inici,
+                        final=dt_final,
+                        activitat=f"{nom_usuari}: {item.activitat}",
+                        estat='validada'
+                    )
+                    creades += 1
 
-                Reserva.objects.create(
-                    entitat=item.user,
-                    instalacio=item.instalacio,
-                    inici=dt_inici,
-                    final=dt_final,
-                    activitat=activitat,
-                    estat='validada'
-                )
-                creades += 1
-
-        if creades:
-            messages.success(
-                request,
-                f"✨ Plantilla aplicada del {data_inici.strftime('%d/%m/%Y')} al {data_fi.strftime('%d/%m/%Y')}: {creades} reserves creades i {ja_existien} ja existien."
-            )
-        else:
-            messages.info(
-                request,
-                f"No s'han creat reserves noves del {data_inici.strftime('%d/%m/%Y')} al {data_fi.strftime('%d/%m/%Y')}: les {ja_existien} ocurrències ja existien."
-            )
+        messages.success(request, f"✨ Plantilla aplicada del {data_inici.strftime('%d/%m/%Y')} al {data_fi.strftime('%d/%m/%Y')}")
 
     return redirect('inici')
 @login_required
