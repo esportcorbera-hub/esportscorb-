@@ -502,40 +502,82 @@ input, select, textarea, button { max-width: 100%; }
                 
                 // --- LÒGICA D'EDICIÓ EN CLICAR ---
                 eventClick: function(info) {
-                    if (!esTecnic) return; // Si no és tècnic, no fem res
+                    if (!esTecnic && !esConserge) return;
 
                     const reservaId = info.event.id;
                     const titolActual = info.event.title;
-                    const estatActual = info.event.extendedProps.estat;
+                    const props = info.event.extendedProps;
+                    const estatActual = props.estat;
+                    const escaparHtml = valor => String(valor ?? '').replace(/[&<>"']/g, caracter => ({
+                        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                    }[caracter]));
+                    const titolEscapat = escaparHtml(titolActual);
+                    const espaiEscapat = escaparHtml(props.instalacio || '');
+                    const esReserva = props.tipus === 'reserva';
+                    const potMarcarNoPresentat = esReserva && estatActual === 'validada';
+
+                    if (!esTecnic && !esReserva) return;
+
+                    const contenidoTecnico = esTecnic ? `
+                        <div class="text-start">
+                            <label class="small fw-bold">Modificar Títol:</label>
+                            <input id="swal-titol" class="form-control mb-3" value="${titolEscapat}">
+                            <label class="small fw-bold">Estat:</label>
+                            <select id="swal-estat" class="form-select">
+                                <option value="pendent" ${estatActual === 'pendent' ? 'selected' : ''}>Pendent</option>
+                                <option value="validada" ${estatActual === 'validada' ? 'selected' : ''}>Validada</option>
+                                <option value="rebutjada" ${estatActual === 'rebutjada' ? 'selected' : ''}>Rebutjada</option>
+                            </select>
+                        </div>
+                    ` : `
+                        <div class="text-start">
+                            <p class="mb-1"><strong>Activitat:</strong> ${titolEscapat}</p>
+                            <p class="mb-0"><strong>Espai:</strong> ${espaiEscapat}</p>
+                        </div>
+                    `;
+                    const botóNoPresentat = potMarcarNoPresentat ? `
+                        <button type="button" id="btn-no-presentat" class="btn btn-danger w-100 mt-3">
+                            No presentat
+                        </button>
+                    ` : '';
 
                     Swal.fire({
-                        title: 'GESTIONAR RESERVA',
-                        html: `
-                            <div class="text-start">
-                                <label class="small fw-bold">Modificar Títol:</label>
-                                <input id="swal-titol" class="form-control mb-3" value="${titolActual}">
-                                <label class="small fw-bold">Estat:</label>
-                                <select id="swal-estat" class="form-select">
-                                    <option value="pendent" ${estatActual === 'pendent' ? 'selected' : ''}>Pendent</option>
-                                    <option value="validada" ${estatActual === 'validada' ? 'selected' : ''}>Validada</option>
-                                    <option value="rebutjada" ${estatActual === 'rebutjada' ? 'selected' : ''}>Rebutjada</option>
-                                </select>
-                            </div>
-                        `,
+                        title: esTecnic ? 'GESTIONAR RESERVA' : 'RESERVA',
+                        html: contenidoTecnico + botóNoPresentat,
                         showCancelButton: true,
-                        showDenyButton: true,
+                        showDenyButton: esTecnic,
+                        showConfirmButton: esTecnic,
+                        cancelButtonText: 'Tancar',
                         confirmButtonText: 'Guardar',
                         denyButtonText: 'Eliminar',
                         confirmButtonColor: '#198754',
                         denyButtonColor: '#dc3545',
+                        didOpen: () => {
+                            const btnNoPresentat = document.getElementById('btn-no-presentat');
+                            if (btnNoPresentat) {
+                                btnNoPresentat.addEventListener('click', async () => {
+                                    const confirmacio = await Swal.fire({
+                                        title: 'Confirmar absència',
+                                        text: 'S’enviarà un correu al tècnic indicant que l’entitat no s’ha presentat.',
+                                        icon: 'warning',
+                                        showCancelButton: true,
+                                        confirmButtonText: 'Enviar avís',
+                                        cancelButtonText: 'Tornar',
+                                        confirmButtonColor: '#dc3545'
+                                    });
+                                    if (confirmacio.isConfirmed) {
+                                        enviarAccioReserva(reservaId, 'no_presentat');
+                                    }
+                                });
+                            }
+                        }
                     }).then((result) => {
-                        if (result.isConfirmed) {
+                        if (result.isConfirmed && esTecnic) {
                             enviarAccioReserva(reservaId, 'editar', {
                                 titol: document.getElementById('swal-titol').value,
                                 estat: document.getElementById('swal-estat').value
                             });
-                        } else if (result.isDenied) {
-                            // Confirmació d'eliminació
+                        } else if (result.isDenied && esTecnic) {
                             Swal.fire({
                                 title: 'Segur?',
                                 text: "No podràs recuperar aquesta reserva.",
@@ -739,20 +781,20 @@ input, select, textarea, button { max-width: 100%; }
 
                     // 👇 NOMÉS MOSTRAR L'ALERTA SI NO ÉS UNA ACCIÓ SILENCIOSA
                     // Pots decidir quines accions vols que avisin i quines no
-                    const accionsAmbAlerta = ['crear_directe', 'eliminar', 'validar', 'rebutjar'];
+                    const accionsAmbAlerta = ['crear_directe', 'eliminar', 'validar', 'rebutjar', 'no_presentat'];
                     if (accionsAmbAlerta.includes(accio) || data.num_creades) {
                         Swal.fire({
-                            title: data.num_creades ? 'Reserves creades' : 'Fet!',
-                            text: data.num_creades ? data.message : '',
+                            title: data.num_creades ? 'Reserves creades' : (accio === 'no_presentat' ? 'Avís enviat' : 'Fet!'),
+                            text: data.num_creades ? data.message : (accio === 'no_presentat' ? data.message : ''),
                             icon: 'success',
                             timer: data.num_creades ? 1800 : 700,
                             showConfirmButton: false
                         });
                     }
-                } else if (accio === 'crear') {
+                } else if (accio === 'crear' || accio === 'no_presentat') {
                     Swal.fire({
-                        title: 'No s’ha pogut crear la reserva',
-                        text: data.message || 'Revisa les dates i els dies seleccionats.',
+                        title: accio === 'no_presentat' ? 'No s’ha pogut enviar l’avís' : 'No s’ha pogut crear la reserva',
+                        text: data.message || (accio === 'no_presentat' ? 'Revisa la configuració del correu i torna-ho a provar.' : 'Revisa les dates i els dies seleccionats.'),
                         icon: 'error',
                         confirmButtonColor: '#1a1a1a'
                     });
@@ -760,10 +802,10 @@ input, select, textarea, button { max-width: 100%; }
             })
             .catch(error => {
                 console.error('Error:', error);
-                if (accio === 'crear') {
+                if (accio === 'crear' || accio === 'no_presentat') {
                     Swal.fire({
                         title: 'Error de connexió',
-                        text: 'No s’ha pogut crear la reserva. Torna-ho a provar.',
+                        text: accio === 'no_presentat' ? 'No s’ha pogut enviar l’avís. Torna-ho a provar.' : 'No s’ha pogut crear la reserva. Torna-ho a provar.',
                         icon: 'error',
                         confirmButtonColor: '#1a1a1a'
                     });

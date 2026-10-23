@@ -791,6 +791,55 @@ def accio_reserva(request):
     reserva = Reserva.objects.filter(id=reserva_id).first() if reserva_id else None
     extra = ActivitatExtra.objects.filter(id=reserva_id).first() if reserva_id else None
     
+    if accio == 'no_presentat':
+        es_conserge = request.user.groups.filter(name='Conserge').exists()
+        es_tecnic = request.user.is_staff and not es_conserge
+        if not (es_tecnic or es_conserge):
+            return JsonResponse({'status': 'error', 'message': 'No tens permís per marcar aquesta reserva.'}, status=403)
+        if not reserva:
+            return JsonResponse({'status': 'error', 'message': 'No s’ha trobat la reserva.'}, status=404)
+        if reserva.estat != 'validada':
+            return JsonResponse({'status': 'error', 'message': 'Només es pot marcar com a no presentat una reserva validada.'}, status=400)
+
+        tecnics_emails = list(User.objects.filter(
+            groups__name='Tècnic',
+            is_active=True
+        ).exclude(email='').values_list('email', flat=True).distinct())
+        if not tecnics_emails:
+            return JsonResponse({'status': 'error', 'message': 'No hi ha cap correu de tècnic configurat per rebre l’avís.'}, status=400)
+
+        inici_local = timezone.localtime(reserva.inici)
+        final_local = timezone.localtime(reserva.final)
+        nom_entitat = reserva.entitat.get_full_name() or reserva.entitat.first_name or reserva.entitat.username
+        assumpte = f"No presentat: {reserva.instalacio.nom}"
+        missatge = (
+            f"Hola,\n\nS’ha indicat que l’entitat {nom_entitat} no s’ha presentat a l’horari acordat.\n\n"
+            f"Activitat: {reserva.activitat}\n"
+            f"Espai: {reserva.instalacio.nom}\n"
+            f"Data: {inici_local.strftime('%d/%m/%Y')}\n"
+            f"Horari: {inici_local.strftime('%H:%M')}–{final_local.strftime('%H:%M')}\n\n"
+            f"Avisat per: {request.user.get_full_name() or request.user.username}."
+        )
+        try:
+            enviats = send_mail(
+                assumpte,
+                missatge,
+                settings.DEFAULT_FROM_EMAIL,
+                tecnics_emails,
+                fail_silently=False
+            )
+        except Exception:
+            return JsonResponse({'status': 'error', 'message': 'No s’ha pogut enviar el correu. Revisa la configuració del servei de correu.'}, status=502)
+        if not enviats:
+            return JsonResponse({'status': 'error', 'message': 'El servei de correu no ha confirmat l’enviament.'}, status=502)
+
+        return JsonResponse({
+            'status': 'ok',
+            'message': 'Avís enviat al tècnic.',
+            'num_pendents': Reserva.objects.filter(estat='pendent').count(),
+            'estat_final': reserva.estat
+        })
+
     estat_final = 'pendent'
 
     if accio == 'eliminar':
