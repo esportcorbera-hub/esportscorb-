@@ -21,6 +21,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.utils.dateparse import parse_datetime
 
+
+def previsualitzacio_modificar_reserva(request):
+    """Mock interactiu sense accés a la base de dades; només es conserva a la branca de revisió."""
+    return render(request, 'reservescorbera/preview_modificar_reserva.html')
+
 # 1. HOME PÚBLIC
 def home(request):
     # Canviem .all() per .filter(parent__isnull=True)
@@ -81,6 +86,7 @@ def inici(request):
         'num_pendents': num_pendents,
         'entitats': entitats,
         'conserges': conserges,
+        'instalacions_edicio': Instalacio.objects.exclude(nom__icontains='personal esports').exclude(nom__icontains='extraordin').order_by('nom'),
         'es_tecnic': request.user.is_staff
     }
     
@@ -431,7 +437,13 @@ def api_reserves(request):
                     'id_inst': r.instalacio.id,        # <--- AFEGIT: ID de la pista
                     'id_pare': id_pare,                # <--- AFEGIT: ID del pare
                     'estat': r.estat,
-                    'tipus': 'reserva'
+                    'tipus': 'reserva',
+                    'pot_editar_entitat': (
+                        request.user.is_authenticated
+                        and not es_staff
+                        and not es_conserge
+                        and _reserva_amb_nom_entitat(r, request.user)
+                    )
                 }
             })
         except Exception as e:
@@ -1178,6 +1190,52 @@ def _reserva_amb_nom_entitat(reserva, user):
         reserva.activitat.casefold().startswith(prefix.casefold())
         for prefix in _prefixos_nom_entitat_calendari(user)
     )
+
+
+@login_required
+
+
+@login_required
+@require_POST
+def modificar_reserva_entitat(request, pk):
+    reserva = get_object_or_404(Reserva.objects.select_related('instalacio'), pk=pk)
+    es_tecnic = request.user.is_staff and not request.user.groups.filter(name='Conserge').exists()
+    if es_tecnic or not _reserva_amb_nom_entitat(reserva, request.user):
+        return JsonResponse({'status': 'error', 'message': 'No tens permís per modificar aquesta reserva.'}, status=403)
+
+    try:
+        instalacio = Instalacio.objects.get(pk=request.POST.get('instalacio_id'))
+        inici = parse_datetime(request.POST.get('inici', ''))
+        final = parse_datetime(request.POST.get('final', ''))
+        if not inici or not final:
+            raise ValueError
+        if timezone.is_naive(inici):
+            inici = timezone.make_aware(inici)
+        if timezone.is_naive(final):
+            final = timezone.make_aware(final)
+        if final <= inici:
+            return JsonResponse({'status': 'error', 'message': 'L’hora final ha de ser posterior a la inicial.'}, status=400)
+    except (Instalacio.DoesNotExist, TypeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Revisa l’espai, la data i les hores.'}, status=400)
+
+    ids_en_conflicte = [instalacio.id]
+    if instalacio.parent_id:
+        ids_en_conflicte.append(instalacio.parent_id)
+    ids_en_conflicte.extend(instalacio.sub_espais.values_list('id', flat=True))
+    solapament = Reserva.objects.filter(
+        instalacio_id__in=ids_en_conflicte,
+        estat__in=['pendent', 'validada']
+    ).exclude(pk=reserva.pk).filter(
+        Q(inici__lt=final, final__gt=inici)
+    ).exists()
+    if solapament:
+        return JsonResponse({'status': 'error', 'message': 'Aquest espai ja està ocupat en aquell horari.'}, status=409)
+
+    reserva.instalacio = instalacio
+    reserva.inici = inici
+    reserva.final = final
+    reserva.save(update_fields=['instalacio', 'inici', 'final'])
+    return JsonResponse({'status': 'ok', 'message': 'Reserva modificada correctament.'})
 
 
 @login_required
