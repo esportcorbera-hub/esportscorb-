@@ -2,7 +2,7 @@ import logging
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.http import HttpResponseForbidden
@@ -13,7 +13,7 @@ from django.views.decorators.http import require_http_methods
 logger = logging.getLogger(__name__)
 
 
-@staff_member_required
+@login_required(login_url='/login/')
 @require_http_methods(["GET", "POST"])
 def prova_correu_tecnic(request):
     if not request.user.groups.filter(name="Tècnic").exists():
