@@ -1223,9 +1223,15 @@ def modificar_reserva_entitat(request, pk):
     es_conserge = request.user.groups.filter(name='Conserge').exists()
     if request.user.is_staff or es_conserge or not _reserva_amb_nom_entitat(reserva, request.user):
         return JsonResponse({'status': 'error', 'message': 'No tens permís per modificar aquesta reserva.'}, status=403)
+    if reserva.estat not in ('pendent', 'validada'):
+        return JsonResponse({'status': 'error', 'message': 'Només es poden modificar reserves pendents o validades.'}, status=400)
 
     try:
-        instalacio = Instalacio.objects.get(pk=request.POST.get('instalacio_id'))
+        instalacio = Instalacio.objects.exclude(
+            nom__icontains='personal esports'
+        ).exclude(
+            nom__icontains='extraordin'
+        ).get(pk=request.POST.get('instalacio_id'))
         inici = parse_datetime(request.POST.get('inici', ''))
         final = parse_datetime(request.POST.get('final', ''))
         if not inici or not final:
