@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Previsualització · Modificar reserva</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#17212b;background:#f3f6f8}
+*{box-sizing:border-box}body{margin:0}.top{background:#123c5a;color:#fff;padding:18px 24px}.top small{opacity:.8}.wrap{max-width:1000px;margin:28px auto;padding:0 18px}.notice{background:#fff6d8;border:1px solid #f0d479;border-radius:10px;padding:13px 16px;margin-bottom:20px;font-size:14px}.calendar{background:white;border:1px solid #dce3e8;border-radius:12px;overflow:hidden;box-shadow:0 4px 18px #152b3d0d}.week{display:grid;grid-template-columns:repeat(7,1fr);background:#f8fafb;border-bottom:1px solid #dce3e8}.week div{padding:13px 8px;text-align:center;font-size:13px;font-weight:650;border-right:1px solid #e6ebef}.days{display:grid;grid-template-columns:repeat(7,1fr);min-height:320px}.day{padding:10px 7px;border-right:1px solid #edf0f2;position:relative;color:#73808b;font-size:13px}.event{margin-top:18px;background:#23864c;color:white;border-radius:6px;padding:8px 9px;font-size:12px;line-height:1.4;cursor:pointer;box-shadow:0 2px 4px #0002}.event:hover{background:#176d3b}.hint{font-size:13px;color:#586570;margin:13px 2px}.modal-bg{position:fixed;inset:0;background:#101c28a8;display:none;align-items:center;justify-content:center;padding:16px}.modal-bg.open{display:flex}.modal{background:white;width:min(490px,100%);border-radius:14px;padding:23px;box-shadow:0 15px 50px #0004}.modal h2{margin:0 0 5px;font-size:20px}.modal p{color:#64717c;font-size:14px;margin:0 0 18px}.field{display:block;margin:13px 0}.field span{display:block;font-size:13px;font-weight:650;margin-bottom:6px}.field select,.field input{width:100%;font:inherit;border:1px solid #cbd4db;border-radius:7px;padding:10px;background:#fff}.actions{display:flex;justify-content:flex-end;gap:9px;margin-top:20px}.btn{border:0;border-radius:7px;padding:10px 15px;font:inherit;font-weight:650;cursor:pointer}.cancel{background:#edf1f4;color:#293743}.save{background:#198754;color:white}.error{color:#b42318;font-size:13px;min-height:18px}.toast{display:none;background:#e7f5ec;color:#176b38;border:1px solid #a9d9b9;border-radius:8px;padding:11px 14px;margin-top:14px}.toast.show{display:block}
+@media(max-width:640px){.wrap{padding:0 9px;margin:16px auto}.day{padding:7px 4px;font-size:11px;min-height:260px}.week div{font-size:11px;padding:10px 3px}.event{font-size:10px;padding:6px 4px}.top{padding:14px 16px}}
+</style>
+</head>
+<body>
+<header class="top"><strong>Esports Corbera</strong><br><small>Previsualització de la modificació de reserves</small></header>
+<main class="wrap">
+<div class="notice"><strong>Previsualització:</strong> les dades són d’exemple. Els canvis fets aquí no afecten el calendari real ni s’envien a la base de dades.</div>
+<section class="calendar" aria-label="Calendari de mostra">
+<div class="week"><div>Dilluns<br>12 oct.</div><div>Dimarts<br>13 oct.</div><div>Dimecres<br>14 oct.</div><div>Dijous<br>15 oct.</div><div>Divendres<br>16 oct.</div><div>Dissabte<br>17 oct.</div><div>Diumenge<br>18 oct.</div></div>
+<div class="days"><div class="day">12<div class="event" id="booking">AEFCORBERA: Entrenament<br>Pavelló · 18:00–19:30</div></div><div class="day">13</div><div class="day">14</div><div class="day">15</div><div class="day">16</div><div class="day">17</div><div class="day">18</div></div></section>
+<p class="hint">Clica la reserva pròpia per veure l’acció de modificació.</p><div class="toast" id="toast" role="status">Canvi de mostra aplicat al calendari.</div>
+</main>
+<div class="modal-bg" id="overlay" role="dialog" aria-modal="true" aria-labelledby="title">
+<div class="modal"><h2 id="title">Modificar reserva</h2><p>Canvia l’espai, la data i l’horari de la reserva.</p>
+<label class="field"><span>Espai</span><select id="space"><option>Pavelló</option><option>Camp de futbol</option><option>Pista exterior</option><option>Gimnàs</option></select></label>
+<label class="field"><span>Inici</span><input id="start" type="datetime-local" value="2026-10-12T18:00"></label>
+<label class="field"><span>Final</span><input id="end" type="datetime-local" value="2026-10-12T19:30"></label>
+<div class="error" id="error"></div><div class="actions"><button class="btn cancel" id="cancel">Cancel·lar</button><button class="btn save" id="save">Modificar reserva</button></div>
+</div></div>
+<script>
+const overlay=document.getElementById('overlay'),booking=document.getElementById('booking');
+booking.addEventListener('click',()=>{overlay.classList.add('open');document.getElementById('error').textContent=''});
+document.getElementById('cancel').addEventListener('click',()=>overlay.classList.remove('open'));
+overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.classList.remove('open')});
+document.getElementById('save').addEventListener('click',()=>{
+ const start=document.getElementById('start').value,end=document.getElementById('end').value;
+ const error=document.getElementById('error');
+ if(!start||!end||new Date(end)<=new Date(start)){error.textContent='L’hora final ha de ser posterior a la inicial.';return}
+ // Horari ocupat de mostra per ensenyar la validació d'espais disponibles.
+ if(document.getElementById('space').value==='Pavelló'&&start.startsWith('2026-10-12T18')){error.textContent='Aquest espai ja està ocupat en aquell horari. Prova un altre espai o una altra hora.';return}
+ const d=new Date(start),f=new Date(end),fmt=x=>x.toLocaleTimeString('ca-ES',{hour:'2-digit',minute:'2-digit'});
+ booking.innerHTML='AEFCORBERA: Entrenament<br>'+document.getElementById('space').value+' · '+fmt(d)+'–'+fmt(f);
+ overlay.classList.remove('open');document.getElementById('toast').classList.add('show');
+});
+</script>
+</body></html>
