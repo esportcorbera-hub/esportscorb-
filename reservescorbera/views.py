@@ -81,6 +81,7 @@ def inici(request):
         'num_pendents': num_pendents,
         'entitats': entitats,
         'conserges': conserges,
+        'instalacions_edicio': Instalacio.objects.exclude(nom__icontains='personal esports').exclude(nom__icontains='extraordin').order_by('nom'),
         'es_tecnic': request.user.is_staff
     }
     
@@ -431,7 +432,13 @@ def api_reserves(request):
                     'id_inst': r.instalacio.id,        # <--- AFEGIT: ID de la pista
                     'id_pare': id_pare,                # <--- AFEGIT: ID del pare
                     'estat': r.estat,
-                    'tipus': 'reserva'
+                    'tipus': 'reserva',
+                    'pot_editar_entitat': (
+                        request.user.is_authenticated
+                        and not es_staff
+                        and not es_conserge
+                        and _reserva_amb_nom_entitat(r, request.user)
+                    )
                 }
             })
         except Exception as e:
@@ -1210,8 +1217,115 @@ def meves_reserves(request):
     
     return render(request, 'reservescorbera/gestionar_reserves.html', {
         'reserves': reserves_usuari,
-        'totes_entitats': totes_entitats
+        'totes_entitats': totes_entitats,
+        'instalacions_edicio': Instalacio.objects.exclude(nom__icontains='personal esports').exclude(nom__icontains='extraordin').order_by('nom'),
+        'es_entitat': not request.user.is_staff and not request.user.groups.filter(name='Conserge').exists()
     })
+
+
+@login_required
+@require_POST
+def modificar_reserva_entitat(request, pk):
+    reserva = get_object_or_404(Reserva.objects.select_related('instalacio'), pk=pk)
+    es_conserge = request.user.groups.filter(name='Conserge').exists()
+    if request.user.is_staff or es_conserge or not _reserva_amb_nom_entitat(reserva, request.user):
+        return JsonResponse({'status': 'error', 'message': 'No tens permís per modificar aquesta reserva.'}, status=403)
+    if reserva.estat not in ('pendent', 'validada'):
+        return JsonResponse({'status': 'error', 'message': 'Només es poden modificar reserves pendents o validades.'}, status=400)
+
+    try:
+        instalacio = Instalacio.objects.exclude(
+            nom__icontains='personal esports'
+        ).exclude(
+            nom__icontains='extraordin'
+        ).get(pk=request.POST.get('instalacio_id'))
+        inici = parse_datetime(request.POST.get('inici', ''))
+        final = parse_datetime(request.POST.get('final', ''))
+        if not inici or not final:
+            raise ValueError
+        if timezone.is_naive(inici):
+            inici = timezone.make_aware(inici)
+        if timezone.is_naive(final):
+            final = timezone.make_aware(final)
+        if final <= inici:
+            return JsonResponse({'status': 'error', 'message': 'L’hora final ha de ser posterior a la inicial.'}, status=400)
+    except (Instalacio.DoesNotExist, TypeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Revisa l’espai, la data i les hores.'}, status=400)
+
+    espais_solapats = [instalacio.id]
+    if instalacio.parent_id:
+        espais_solapats.append(instalacio.parent_id)
+    espais_solapats.extend(instalacio.sub_espais.values_list('id', flat=True))
+    ocupada = Reserva.objects.filter(
+        instalacio_id__in=espais_solapats,
+        estat__in=['pendent', 'validada'],
+        inici__lt=final,
+        final__gt=inici
+    ).exclude(pk=reserva.pk).exists()
+    if ocupada:
+        return JsonResponse({'status': 'error', 'message': 'Aquest espai ja està ocupat en aquell dia i horari.'}, status=409)
+
+    espai_anterior = reserva.instalacio.nom
+    inici_anterior = reserva.inici
+    final_anterior = reserva.final
+    activitat_nom = reserva.activitat
+    hi_ha_canvi = (
+        reserva.instalacio_id != instalacio.id
+        or inici_anterior != inici
+        or final_anterior != final
+    )
+
+    reserva.instalacio = instalacio
+    reserva.inici = inici
+    reserva.final = final
+    reserva.save(update_fields=['instalacio', 'inici', 'final'])
+
+    avis_enviat = False
+    if hi_ha_canvi:
+        inici_local = timezone.localtime(inici_anterior)
+        final_local = timezone.localtime(final_anterior)
+        inici_nou_local = timezone.localtime(inici)
+        final_nou_local = timezone.localtime(final)
+        destinataris = list(User.objects.filter(
+            is_active=True
+        ).exclude(
+            Q(email='') | Q(email__isnull=True)
+        ).values_list('email', flat=True))
+
+        if destinataris:
+            assumpte = f"📢 ESPAI ALLIBERAT: {espai_anterior} - {activitat_nom}"
+            cos = (
+                f"Hola,\n\nS'informa que una reserva ha estat modificada i l'espai anterior torna a estar disponible:\n\n"
+                f"📍 Espai alliberat: {espai_anterior}\n"
+                f"📅 Data: {inici_local.strftime('%d/%m/%Y')}\n"
+                f"⏰ Hora: {inici_local.strftime('%H:%M')} - {final_local.strftime('%H:%M')}\n"
+                f"👤 Entitat: {activitat_nom}\n\n"
+                f"La reserva s'ha traslladat a:\n"
+                f"📍 Espai: {instalacio.nom}\n"
+                f"📅 Data: {inici_nou_local.strftime('%d/%m/%Y')}\n"
+                f"⏰ Hora: {inici_nou_local.strftime('%H:%M')} - {final_nou_local.strftime('%H:%M')}\n\n"
+                f"Aquest és un missatge automàtic enviat a les entitats amb correu registrat."
+            )
+            try:
+                from django.core.mail import EmailMessage
+                email = EmailMessage(
+                    subject=assumpte,
+                    body=cos,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=['esportscorb@gmail.com'],
+                    bcc=destinataris
+                )
+                avis_enviat = email.send(fail_silently=False) > 0
+            except Exception as e:
+                print(f"Error enviant correu de modificació de reserva: {e}")
+
+    missatge = 'La reserva s’ha modificat correctament.'
+    if hi_ha_canvi and avis_enviat:
+        missatge += ' També s’ha enviat l’avís d’alliberament a les entitats.'
+    elif hi_ha_canvi:
+        missatge += ' No s’ha pogut confirmar l’enviament del correu d’avís.'
+    return JsonResponse({'status': 'ok', 'message': missatge, 'avis_enviat': avis_enviat})
+
 
 @csrf_exempt # Per evitar l'error 403 que et sortia
 @login_required

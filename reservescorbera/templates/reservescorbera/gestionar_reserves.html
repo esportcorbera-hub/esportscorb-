@@ -126,6 +126,17 @@ input, select, textarea, button { max-width: 100%; }
                             <span class="badge badge-instalacio">{{ r.instalacio.nom }}</span>
                         </div>
                         
+                    {% if es_entitat %}
+                    <button type="button" class="btn btn-outline-primary btn-sm w-100 mb-2"
+                            data-reserva-id="{{ r.id }}"
+                            data-espai-id="{{ r.instalacio_id }}"
+                            data-inici="{{ r.inici|date:'c' }}"
+                            data-final="{{ r.final|date:'c' }}"
+                            onclick="obrirModalModificar(this)">
+                        <i class="bi bi-pencil-square me-1"></i> Modificar reserva
+                    </button>
+                    {% endif %}
+
                         <!-- El títol té un padding a la dreta per no tocar la paperera -->
                         <h5 class="fw-bold mb-3 pe-5" style="color: var(--primary); min-height: 2.4em;">{{ r.activitat }}</h5>
                         
@@ -158,6 +169,35 @@ input, select, textarea, button { max-width: 100%; }
     {% endfor %}
 </div>
 
+<!-- MODAL MODIFICAR RESERVA -->
+<div class="modal fade" id="modalModificar" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content shadow-lg">
+    <div class="modal-header">
+      <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square me-2"></i>Modificar reserva</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Tancar"></button>
+    </div>
+    <form id="formModificarReserva">
+      <div class="modal-body p-4">
+        <input type="hidden" id="modificarReservaId">
+        <label class="form-label fw-bold" for="modificarEspai">Espai</label>
+        <select class="form-select mb-3" id="modificarEspai" required>
+          {% for espai in instalacions_edicio %}<option value="{{ espai.id }}">{{ espai.nom }}</option>{% endfor %}
+        </select>
+        <label class="form-label fw-bold" for="modificarInici">Dia i hora d'inici</label>
+        <input class="form-control mb-3" id="modificarInici" type="datetime-local" required>
+        <label class="form-label fw-bold" for="modificarFinal">Dia i hora de finalització</label>
+        <input class="form-control" id="modificarFinal" type="datetime-local" required>
+        <div class="alert alert-info small mt-3 mb-0"><i class="bi bi-envelope me-1"></i> En desar, s’avisarà les entitats que l’espai i l’horari anteriors queden lliures.</div>
+        <div id="errorModificarReserva" class="text-danger small mt-3" role="alert"></div>
+      </div>
+      <div class="modal-footer border-0 justify-content-center pb-4">
+        <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Tancar</button>
+        <button type="submit" id="btnDesarModificacio" class="btn btn-success px-4 fw-bold">Desar canvis</button>
+      </div>
+    </form>
+  </div></div>
+</div>
+
 <!-- MODAL ELIMINAR -->
 <div class="modal fade" id="modalEliminar" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -184,6 +224,49 @@ input, select, textarea, button { max-width: 100%; }
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
+
+    function valorDatetimeLocal(valor) {
+        const data = new Date(valor);
+        const pad = n => String(n).padStart(2, '0');
+        return `${data.getFullYear()}-${pad(data.getMonth() + 1)}-${pad(data.getDate())}T${pad(data.getHours())}:${pad(data.getMinutes())}`;
+    }
+
+    function obrirModalModificar(boto) {
+        document.getElementById('modificarReservaId').value = boto.dataset.reservaId;
+        document.getElementById('modificarEspai').value = boto.dataset.espaiId;
+        document.getElementById('modificarInici').value = valorDatetimeLocal(boto.dataset.inici);
+        document.getElementById('modificarFinal').value = valorDatetimeLocal(boto.dataset.final);
+        document.getElementById('errorModificarReserva').textContent = '';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalModificar')).show();
+    }
+
+    document.getElementById('formModificarReserva').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const boto = document.getElementById('btnDesarModificacio');
+        const error = document.getElementById('errorModificarReserva');
+        error.textContent = '';
+        boto.disabled = true;
+        boto.textContent = 'Comprovant disponibilitat...';
+        const dades = new FormData();
+        dades.append('instalacio_id', document.getElementById('modificarEspai').value);
+        dades.append('inici', document.getElementById('modificarInici').value);
+        dades.append('final', document.getElementById('modificarFinal').value);
+        dades.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+        const id = document.getElementById('modificarReservaId').value;
+        const url = "{% url 'modificar_reserva_entitat' 0 %}".replace('/0/', `/${id}/`);
+        try {
+            const response = await fetch(url, { method: 'POST', body: dades, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            const resultat = await response.json();
+            if (!response.ok || resultat.status !== 'ok') throw new Error(resultat.message || 'No s’ha pogut modificar la reserva.');
+            await Swal.fire({ title: 'Reserva modificada', text: resultat.message, icon: 'success' });
+            window.location.reload();
+        } catch (err) {
+            error.textContent = err.message || 'Error de connexió. Torna-ho a provar.';
+            boto.disabled = false;
+            boto.textContent = 'Desar canvis';
+        }
+    });
+
     window.idReservaAEliminar = null;
 
     function obrirModalEliminar(id, titol) {
