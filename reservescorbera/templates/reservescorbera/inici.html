@@ -502,7 +502,8 @@ input, select, textarea, button { max-width: 100%; }
                 
                 // --- LÒGICA D'EDICIÓ EN CLICAR ---
                 eventClick: function(info) {
-                    if (!esTecnic && !esConserge) return;
+                    const potEditarEntitat = props.pot_editar_entitat === true;
+                    if (!esTecnic && !esConserge && !potEditarEntitat) return;
 
                     const reservaId = info.event.id;
                     const titolActual = info.event.title;
@@ -517,6 +518,53 @@ input, select, textarea, button { max-width: 100%; }
                     const potMarcarNoPresentat = esReserva && estatActual === 'validada';
 
                     if (!esTecnic && !esReserva) return;
+
+                    if (!esTecnic && !esConserge && potEditarEntitat) {
+                        const pad = n => String(n).padStart(2, '0');
+                        const valorDataHora = data => {
+                            const d = new Date(data);
+                            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                        };
+                        const opcionsEspais = `{% for espai in instalacions_edicio %}<option value="{{ espai.id }}">{{ espai.nom|escape|escapejs }}</option>{% endfor %}`;
+                        Swal.fire({
+                            title: 'RESERVA PRÒPIA',
+                            html: `<div class="text-start">
+                                <p class="small mb-2"><strong>${titolEscapat}</strong></p>
+                                <label class="small fw-bold">Espai</label>
+                                <select id="entitat-espai" class="form-select mb-2">${opcionsEspais}</select>
+                                <label class="small fw-bold">Inici</label>
+                                <input id="entitat-inici" type="datetime-local" class="form-control mb-2" value="${valorDataHora(info.event.start)}">
+                                <label class="small fw-bold">Final</label>
+                                <input id="entitat-final" type="datetime-local" class="form-control" value="${valorDataHora(info.event.end)}">
+                            </div>`,
+                            showCancelButton: true,
+                            confirmButtonText: 'Modificar reserva',
+                            cancelButtonText: 'Tancar',
+                            confirmButtonColor: '#198754',
+                            didOpen: () => {
+                                const select = document.getElementById('entitat-espai');
+                                select.value = String(props.id_inst);
+                            }
+                        }).then(async result => {
+                            if (!result.isConfirmed) return;
+                            const formData = new FormData();
+                            formData.append('instalacio_id', document.getElementById('entitat-espai').value);
+                            formData.append('inici', document.getElementById('entitat-inici').value);
+                            formData.append('final', document.getElementById('entitat-final').value);
+                            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+                            const url = "{% url 'modificar_reserva_entitat' 0 %}".replace('/0/', `/${reservaId}/`);
+                            try {
+                                const response = await fetch(url, { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                                const data = await response.json();
+                                if (!response.ok) throw new Error(data.message || 'No s’ha pogut modificar la reserva.');
+                                await Swal.fire({ title: 'Reserva modificada', text: data.message, icon: 'success' });
+                                calendar.refetchEvents();
+                            } catch (error) {
+                                Swal.fire({ title: 'No s’ha pogut modificar', text: error.message, icon: 'error' });
+                            }
+                        });
+                        return;
+                    }
 
                     const contenidoTecnico = esTecnic ? `
                         <div class="text-start">
