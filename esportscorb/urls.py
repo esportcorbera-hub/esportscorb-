@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.urls import path
 from django.contrib.auth import views as auth_views
 from reservescorbera import views
+from reservescorbera.email_test import prova_correu_tecnic
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -22,6 +23,7 @@ urlpatterns = [
 
     # Gestió tècnica (Staff) 
     path('gestio-tecnica/', views.gestio_tecnica, name='gestio_tecnica'),
+    path('gestio-tecnica/prova-correu/', prova_correu_tecnic, name='prova_correu_tecnic'),
     path('gestio-tecnica/nova-instalacio/', views.crear_instalacio, name='crear_instalacio'),
     path('gestio-tecnica/eliminar-instalacio/<int:pk>/', views.eliminar_instalacio, name='eliminar_instalacio'),
     path('reserva/editar/<int:pk>/', views.editar_reserva, name='editar_reserva'),
