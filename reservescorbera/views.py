@@ -81,6 +81,7 @@ def inici(request):
         'num_pendents': num_pendents,
         'entitats': entitats,
         'conserges': conserges,
+        'instalacions_edicio': Instalacio.objects.exclude(nom__icontains='personal esports').exclude(nom__icontains='extraordin').order_by('nom'),
         'es_tecnic': request.user.is_staff
     }
     
@@ -431,7 +432,13 @@ def api_reserves(request):
                     'id_inst': r.instalacio.id,        # <--- AFEGIT: ID de la pista
                     'id_pare': id_pare,                # <--- AFEGIT: ID del pare
                     'estat': r.estat,
-                    'tipus': 'reserva'
+                    'tipus': 'reserva',
+                    'pot_editar_entitat': (
+                        request.user.is_authenticated
+                        and not es_staff
+                        and not es_conserge
+                        and _reserva_amb_nom_entitat(r, request.user)
+                    )
                 }
             })
         except Exception as e:
