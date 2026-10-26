@@ -1211,7 +1211,8 @@ def meves_reserves(request):
     return render(request, 'reservescorbera/gestionar_reserves.html', {
         'reserves': reserves_usuari,
         'totes_entitats': totes_entitats,
-        'instalacions_edicio': Instalacio.objects.exclude(nom__icontains='personal esports').exclude(nom__icontains='extraordin').order_by('nom')
+        'instalacions_edicio': Instalacio.objects.exclude(nom__icontains='personal esports').exclude(nom__icontains='extraordin').order_by('nom'),
+        'es_entitat': not request.user.is_staff and not request.user.groups.filter(name='Conserge').exists()
     })
 
 
