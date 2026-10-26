@@ -1282,15 +1282,15 @@ def modificar_reserva_entitat(request, pk):
         if destinataris:
             assumpte = f"📢 ESPAI ALLIBERAT: {espai_anterior} - {activitat_nom}"
             cos = (
-                f"Hola,\\n\\nS'informa que una reserva ha estat modificada i l'espai anterior torna a estar disponible:\\n\\n"
-                f"📍 Espai alliberat: {espai_anterior}\\n"
-                f"📅 Data: {inici_local.strftime('%d/%m/%Y')}\\n"
-                f"⏰ Hora: {inici_local.strftime('%H:%M')} - {final_local.strftime('%H:%M')}\\n"
-                f"👤 Entitat: {activitat_nom}\\n\\n"
-                f"La reserva s'ha traslladat a:\\n"
-                f"📍 Espai: {instalacio.nom}\\n"
-                f"📅 Data: {inici_nou_local.strftime('%d/%m/%Y')}\\n"
-                f"⏰ Hora: {inici_nou_local.strftime('%H:%M')} - {final_nou_local.strftime('%H:%M')}\\n\\n"
+                f"Hola,\n\nS'informa que una reserva ha estat modificada i l'espai anterior torna a estar disponible:\n\n"
+                f"📍 Espai alliberat: {espai_anterior}\n"
+                f"📅 Data: {inici_local.strftime('%d/%m/%Y')}\n"
+                f"⏰ Hora: {inici_local.strftime('%H:%M')} - {final_local.strftime('%H:%M')}\n"
+                f"👤 Entitat: {activitat_nom}\n\n"
+                f"La reserva s'ha traslladat a:\n"
+                f"📍 Espai: {instalacio.nom}\n"
+                f"📅 Data: {inici_nou_local.strftime('%d/%m/%Y')}\n"
+                f"⏰ Hora: {inici_nou_local.strftime('%H:%M')} - {final_nou_local.strftime('%H:%M')}\n\n"
                 f"Aquest és un missatge automàtic enviat a les entitats amb correu registrat."
             )
             try:
