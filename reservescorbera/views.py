@@ -1210,8 +1210,53 @@ def meves_reserves(request):
     
     return render(request, 'reservescorbera/gestionar_reserves.html', {
         'reserves': reserves_usuari,
-        'totes_entitats': totes_entitats
+        'totes_entitats': totes_entitats,
+        'instalacions_edicio': Instalacio.objects.exclude(nom__icontains='personal esports').exclude(nom__icontains='extraordin').order_by('nom')
     })
+
+
+@login_required
+@require_POST
+def modificar_reserva_entitat(request, pk):
+    reserva = get_object_or_404(Reserva.objects.select_related('instalacio'), pk=pk)
+    es_conserge = request.user.groups.filter(name='Conserge').exists()
+    if request.user.is_staff or es_conserge or not _reserva_amb_nom_entitat(reserva, request.user):
+        return JsonResponse({'status': 'error', 'message': 'No tens permís per modificar aquesta reserva.'}, status=403)
+
+    try:
+        instalacio = Instalacio.objects.get(pk=request.POST.get('instalacio_id'))
+        inici = parse_datetime(request.POST.get('inici', ''))
+        final = parse_datetime(request.POST.get('final', ''))
+        if not inici or not final:
+            raise ValueError
+        if timezone.is_naive(inici):
+            inici = timezone.make_aware(inici)
+        if timezone.is_naive(final):
+            final = timezone.make_aware(final)
+        if final <= inici:
+            return JsonResponse({'status': 'error', 'message': 'L’hora final ha de ser posterior a la inicial.'}, status=400)
+    except (Instalacio.DoesNotExist, TypeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Revisa l’espai, la data i les hores.'}, status=400)
+
+    espais_solapats = [instalacio.id]
+    if instalacio.parent_id:
+        espais_solapats.append(instalacio.parent_id)
+    espais_solapats.extend(instalacio.sub_espais.values_list('id', flat=True))
+    ocupada = Reserva.objects.filter(
+        instalacio_id__in=espais_solapats,
+        estat__in=['pendent', 'validada'],
+        inici__lt=final,
+        final__gt=inici
+    ).exclude(pk=reserva.pk).exists()
+    if ocupada:
+        return JsonResponse({'status': 'error', 'message': 'Aquest espai ja està ocupat en aquell dia i horari.'}, status=409)
+
+    reserva.instalacio = instalacio
+    reserva.inici = inici
+    reserva.final = final
+    reserva.save(update_fields=['instalacio', 'inici', 'final'])
+    return JsonResponse({'status': 'ok', 'message': 'La reserva s’ha modificat correctament.'})
+
 
 @csrf_exempt # Per evitar l'error 403 que et sortia
 @login_required
