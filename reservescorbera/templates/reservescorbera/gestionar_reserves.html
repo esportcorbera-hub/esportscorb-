@@ -126,6 +126,7 @@ input, select, textarea, button { max-width: 100%; }
                             <span class="badge badge-instalacio">{{ r.instalacio.nom }}</span>
                         </div>
                         
+                    {% if es_entitat %}
                     <button type="button" class="btn btn-outline-primary btn-sm w-100 mb-2"
                             data-reserva-id="{{ r.id }}"
                             data-espai-id="{{ r.instalacio_id }}"
@@ -134,6 +135,7 @@ input, select, textarea, button { max-width: 100%; }
                             onclick="obrirModalModificar(this)">
                         <i class="bi bi-pencil-square me-1"></i> Modificar reserva
                     </button>
+                    {% endif %}
 
                         <!-- El títol té un padding a la dreta per no tocar la paperera -->
                         <h5 class="fw-bold mb-3 pe-5" style="color: var(--primary); min-height: 2.4em;">{{ r.activitat }}</h5>
