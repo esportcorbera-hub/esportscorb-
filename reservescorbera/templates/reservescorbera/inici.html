@@ -502,7 +502,12 @@ input, select, textarea, button { max-width: 100%; }
                 
                 // --- LÒGICA D'EDICIÓ EN CLICAR ---
                 eventClick: function(info) {
-                    if (!esTecnic && !esConserge) return;
+                    if (!esTecnic && !esConserge) {
+                        if (info.event.extendedProps.pot_editar_entitat === true) {
+                            obrirAccionsReservaEntitat(info);
+                        }
+                        return;
+                    }
 
                     const reservaId = info.event.id;
                     const titolActual = info.event.title;
@@ -742,6 +747,137 @@ input, select, textarea, button { max-width: 100%; }
                 }
             }
         });
+
+        const espaisEditablesEntitat = [
+            {% for espai in instalacions_edicio %}
+            { id: "{{ espai.id }}", nom: "{{ espai.nom|escapejs }}" },
+            {% endfor %}
+        ];
+
+        function dataHoraInput(valor) {
+            const data = new Date(valor);
+            const dos = n => String(n).padStart(2, '0');
+            return `${data.getFullYear()}-${dos(data.getMonth()+1)}-${dos(data.getDate())}T${dos(data.getHours())}:${dos(data.getMinutes())}`;
+        }
+
+        function escaparTextReserva(valor) {
+            return String(valor ?? '').replace(/[&<>"']/g, caracter => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[caracter]));
+        }
+
+        async function obrirAccionsReservaEntitat(info) {
+            const id = info.event.id;
+            const props = info.event.extendedProps;
+            const titol = escaparTextReserva(info.event.title);
+            const espai = escaparTextReserva(props.instalacio || '');
+            const inici = info.event.start;
+            const final = info.event.end;
+            const dataHora = inici ? inici.toLocaleString('ca-ES', { dateStyle: 'short', timeStyle: 'short' }) : '';
+            const horaFinal = final ? final.toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit' }) : '';
+
+            const accio = await Swal.fire({
+                title: 'GESTIONAR RESERVA',
+                html: `<div class="text-start">
+                    <p class="mb-2"><strong>Activitat:</strong> ${titol}</p>
+                    <p class="mb-0"><strong>Espai:</strong> ${espai}</p>
+                    <p class="mb-0"><strong>Dia i hora:</strong> ${dataHora}${horaFinal ? ' — ' + horaFinal : ''}</p>
+                </div>`,
+                showCancelButton: true,
+                showDenyButton: true,
+                showConfirmButton: true,
+                cancelButtonText: 'Tancar',
+                confirmButtonText: 'Modificar reserva',
+                denyButtonText: 'Anul·lar reserva',
+                confirmButtonColor: '#198754',
+                denyButtonColor: '#dc3545'
+            });
+
+            if (accio.isConfirmed) {
+                const resposta = await Swal.fire({
+                    title: 'Modificar reserva',
+                    html: `<div class="text-start">
+                        <label class="small fw-bold mb-1">Espai</label>
+                        <select id="entitat-edit-espai" class="form-select mb-3"></select>
+                        <label class="small fw-bold mb-1">Dia i hora d'inici</label>
+                        <input id="entitat-edit-inici" type="datetime-local" class="form-control mb-3" value="${dataHoraInput(inici)}">
+                        <label class="small fw-bold mb-1">Dia i hora de finalització</label>
+                        <input id="entitat-edit-final" type="datetime-local" class="form-control" value="${dataHoraInput(final)}">
+                        <p class="small text-info mt-3 mb-0"><i class="bi bi-envelope"></i> En desar, s’avisarà les entitats que l’espai i l’horari anteriors queden lliures.</p>
+                    </div>`,
+                    showCancelButton: true,
+                    confirmButtonText: 'Desar canvis',
+                    cancelButtonText: 'Tancar',
+                    confirmButtonColor: '#198754',
+                    didOpen: () => {
+                        const select = document.getElementById('entitat-edit-espai');
+                        espaisEditablesEntitat.forEach(item => {
+                            const option = document.createElement('option');
+                            option.value = item.id;
+                            option.textContent = item.nom;
+                            select.appendChild(option);
+                        });
+                        select.value = String(props.id_inst);
+                    },
+                    preConfirm: async () => {
+                        const iniciNou = document.getElementById('entitat-edit-inici').value;
+                        const finalNou = document.getElementById('entitat-edit-final').value;
+                        if (!iniciNou || !finalNou || new Date(finalNou) <= new Date(iniciNou)) {
+                            Swal.showValidationMessage('L’hora final ha de ser posterior a la inicial.');
+                            return false;
+                        }
+                        const dades = new FormData();
+                        dades.append('instalacio_id', document.getElementById('entitat-edit-espai').value);
+                        dades.append('inici', iniciNou);
+                        dades.append('final', finalNou);
+                        dades.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+                        const url = "{% url 'modificar_reserva_entitat' 0 %}".replace('/0/', `/${id}/`);
+                        try {
+                            const response = await fetch(url, { method: 'POST', body: dades, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                            const resultat = await response.json();
+                            if (!response.ok || resultat.status !== 'ok') throw new Error(resultat.message || 'No s’ha pogut modificar la reserva.');
+                            return resultat;
+                        } catch (error) {
+                            Swal.showValidationMessage(error.message || 'Error de connexió.');
+                            return false;
+                        }
+                    },
+                    showLoaderOnConfirm: true,
+                    allowOutsideClick: () => !Swal.isLoading()
+                });
+                if (resposta.isConfirmed) {
+                    await Swal.fire({ title: 'Reserva modificada', text: resposta.value.message, icon: 'success' });
+                    calendar.refetchEvents();
+                }
+            } else if (accio.isDenied) {
+                const confirmacio = await Swal.fire({
+                    title: 'Anul·lar reserva?',
+                    text: 'S’avisarà les entitats i s’alliberarà l’espai reservat.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, anul·lar',
+                    cancelButtonText: 'Tornar',
+                    confirmButtonColor: '#dc3545'
+                });
+                if (!confirmacio.isConfirmed) return;
+                const dades = new FormData();
+                dades.append('id', id);
+                dades.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+                try {
+                    const response = await fetch("{% url 'eliminar_reserva_entitat' %}", {
+                        method: 'POST',
+                        body: dades,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    const resultat = await response.json();
+                    if (!response.ok || resultat.status !== 'ok') throw new Error(resultat.message || 'No s’ha pogut anul·lar la reserva.');
+                    await Swal.fire({ title: 'Reserva anul·lada', text: 'S’ha enviat l’avís a les entitats.', icon: 'success' });
+                    calendar.refetchEvents();
+                } catch (error) {
+                    Swal.fire({ title: 'Error', text: error.message || 'Error de connexió.', icon: 'error' });
+                }
+            }
+        }
 
         function enviarAccioReserva(id, accio, dadesExtras = {}) {
             const formData = new FormData();
