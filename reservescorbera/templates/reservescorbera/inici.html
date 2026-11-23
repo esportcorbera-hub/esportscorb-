@@ -496,7 +496,10 @@ input, select, textarea, button { max-width: 100%; }
                 buttonText: { today: 'Avui', month: 'Mes', week: 'Setmana', day: 'Dia' },
                 events: '/api/reserves/',
                 datesSet: function(info) { actualitzarHorarisConsergeria(info); },
-                dayHeaderFormat: window.matchMedia('(max-width: 767.98px)').matches ? { weekday: 'short', day: 'numeric' } : { weekday: 'long' },
+                dayHeaderFormat: {
+                    weekday: window.matchMedia('(max-width: 767.98px)').matches ? 'short' : 'long',
+                    day: 'numeric'
+                },
                 dayHeaderDidMount: function() { requestAnimationFrame(renderHorarisConsergeria); },
                 dayCellDidMount: function() { requestAnimationFrame(renderHorarisConsergeria); },
                 
