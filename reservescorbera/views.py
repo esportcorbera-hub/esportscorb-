@@ -920,44 +920,32 @@ from datetime import datetime, timedelta
 
 from datetime import datetime, timedelta
 
-@staff_member_required
-@require_POST
+@login_required
 def aplicar_plantilla_al_calendari(request):
-    """Substitueix dins del període només les reserves marcades com a plantilla.
+    if request.user.is_staff:
+        from .models import PlantillaReserva, Reserva
+        from django.utils import timezone
 
-    Les reserves antigues sense aquesta marca i les reserves manuals/de les entitats
-    queden intactes. La transacció evita deixar el període buit si hi ha un error.
-    """
-    data_inici_str = request.POST.get('data_inici') or request.POST.get('data_dilluns')
-    data_fi_str = request.POST.get('data_fi')
+        data_inici_str = request.GET.get('data_inici') or request.GET.get('data_dilluns')
+        data_fi_str = request.GET.get('data_fi')
 
-    try:
-        data_inici = datetime.strptime(data_inici_str, '%Y-%m-%d').date() if data_inici_str else timezone.now().date()
-        data_fi = datetime.strptime(data_fi_str, '%Y-%m-%d').date() if data_fi_str else data_inici + timedelta(days=6 - data_inici.weekday())
-    except (TypeError, ValueError):
-        messages.error(request, "Les dates del període no són vàlides.")
-        return redirect('inici')
+        try:
+            data_inici = datetime.strptime(data_inici_str, '%Y-%m-%d').date() if data_inici_str else timezone.now().date()
+            data_fi = datetime.strptime(data_fi_str, '%Y-%m-%d').date() if data_fi_str else data_inici + timedelta(days=6 - data_inici.weekday())
+        except ValueError:
+            messages.error(request, "Les dates del període no són vàlides.")
+            return redirect('inici')
 
-    if data_fi < data_inici:
-        messages.error(request, "La data final no pot ser anterior a la data inicial.")
-        return redirect('inici')
+        if data_fi < data_inici:
+            messages.error(request, "La data final no pot ser anterior a la data inicial.")
+            return redirect('inici')
 
-    plantilla = PlantillaReserva.objects.exclude(
-        instalacio__nom__icontains='personal esports'
-    ).exclude(
-        instalacio__nom__icontains='extraordin'
-    )
-    inici_periode = timezone.make_aware(datetime.combine(data_inici, datetime.min.time()))
-    fi_periode = timezone.make_aware(datetime.combine(data_fi + timedelta(days=1), datetime.min.time()))
-    creades = 0
-    eliminades = 0
-
-    with transaction.atomic():
-        eliminades, _ = Reserva.objects.filter(
-            origen_plantilla=True,
-            inici__gte=inici_periode,
-            inici__lt=fi_periode
-        ).delete()
+        plantilla = PlantillaReserva.objects.exclude(
+            instalacio__nom__icontains='personal esports'
+        ).exclude(
+            instalacio__nom__icontains='extraordin'
+        )
+        creades = 0
 
         for dies_des_de_l_inici in range((data_fi - data_inici).days + 1):
             data_reserva = data_inici + timedelta(days=dies_des_de_l_inici)
@@ -967,12 +955,9 @@ def aplicar_plantilla_al_calendari(request):
 
                 dt_inici = timezone.make_aware(datetime.combine(data_reserva, item.inici))
                 dt_final = timezone.make_aware(datetime.combine(data_reserva, item.final))
-                espais_solapats = [item.instalacio_id]
-                if item.instalacio.parent_id:
-                    espais_solapats.append(item.instalacio.parent_id)
-                espais_solapats.extend(item.instalacio.sub_espais.values_list('id', flat=True))
+
                 hi_ha_solapament = Reserva.objects.filter(
-                    instalacio_id__in=espais_solapats,
+                    instalacio=item.instalacio,
                     inici__lt=dt_final,
                     final__gt=dt_inici
                 ).exclude(estat='rebutjada').exists()
@@ -985,12 +970,12 @@ def aplicar_plantilla_al_calendari(request):
                         inici=dt_inici,
                         final=dt_final,
                         activitat=f"{nom_usuari}: {item.activitat}",
-                        estat='validada',
-                        origen_plantilla=True
+                        estat='validada'
                     )
                     creades += 1
 
-    messages.success(request, f"✨ Plantilla substituïda del {data_inici.strftime('%d/%m/%Y')} al {data_fi.strftime('%d/%m/%Y')}: {eliminades} reserves de plantilla substituïdes i {creades} creades.")
+        messages.success(request, f"✨ Plantilla aplicada del {data_inici.strftime('%d/%m/%Y')} al {data_fi.strftime('%d/%m/%Y')}")
+
     return redirect('inici')
 @login_required
 def gestio_plantilla(request):

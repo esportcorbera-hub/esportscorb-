@@ -1322,8 +1322,7 @@ input, select, textarea, button { max-width: 100%; }
                     '<label for="plantilla-data-inici" class="small fw-bold">Data d’inici:</label>' +
                     '<input id="plantilla-data-inici" type="date" class="form-control mb-3" value="' + formatDate(dataInicialCalendari) + '" required>' +
                     '<label for="plantilla-data-fi" class="small fw-bold">Data final:</label>' +
-                    '<input id="plantilla-data-fi" type="date" class="form-control" value="' + formatDate(dataFinalCalendari) + '" required></div>' +
-                    '<div class="alert alert-warning small text-start mt-3 mb-0">Només se substituiran les reserves identificades com a generades des de plantilla dins d’aquest període. Les reserves manuals, de les entitats i els registres antics sense aquesta marca es conservaran.</div>',
+                    '<input id="plantilla-data-fi" type="date" class="form-control" value="' + formatDate(dataFinalCalendari) + '" required></div>',
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonText: 'SÍ, APLICA',
@@ -1344,18 +1343,11 @@ input, select, textarea, button { max-width: 100%; }
                 }
             }).then((result) => {
                 if (result.isConfirmed) {
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = "{% url 'aplicar_plantilla' %}";
-                    [['data_inici', result.value.dataInici], ['data_fi', result.value.dataFi], ['csrfmiddlewaretoken', '{{ csrf_token }}']].forEach(([name, value]) => {
-                        const input = document.createElement('input');
-                        input.type = 'hidden';
-                        input.name = name;
-                        input.value = value;
-                        form.appendChild(input);
+                    const params = new URLSearchParams({
+                        data_inici: result.value.dataInici,
+                        data_fi: result.value.dataFi
                     });
-                    document.body.appendChild(form);
-                    form.submit();
+                    window.location.href = "/aplicar-plantilla/?" + params.toString();
                 }
             });
         } else {
