@@ -7,6 +7,7 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('reserva/modificar-entitat/<int:pk>/', views.modificar_reserva_entitat, name='modificar_reserva_entitat'),
+    path('reserva/modificar-titol-entitat/<int:pk>/', views.modificar_titol_reserva_entitat, name='modificar_titol_reserva_entitat'),
     path('admin/', admin.site.urls),
     
     # Pàgines principals

@@ -168,6 +168,9 @@
     font-size: clamp(.68rem, 12cqw, var(--fc-event-font-size)); line-height: 1.1;
 }
 #calendar[class*="calendar-density-"] .fc-event-title { white-space: normal; overflow-wrap: anywhere; }
+#calendar, #calendar .fc, #calendar .fc-view-harness { width: 100%; min-width: 0; }
+#calendar .fc .fc-toolbar { flex-wrap: wrap; gap: .5rem; }
+#calendar .fc .fc-toolbar-title { font-size: clamp(1rem, 2.8vw, 1.5rem); }
 #calendar[class*="calendar-density-"] .fc-timegrid-event .fc-event-main-frame,
 #calendar[class*="calendar-density-"] .fc-timegrid-event .fc-event-main { min-width: 0; }
 @media (max-width: 767.98px) {
@@ -176,6 +179,8 @@
     #calendar.calendar-density-1 { --fc-event-font-size: .74rem; }
     #calendar.calendar-density-2 { --fc-event-font-size: .70rem; }
     #calendar.calendar-density-3plus { --fc-event-font-size: .68rem; }
+    #calendar .fc .fc-toolbar-title { font-size: 1rem; }
+    #calendar .fc .fc-button { padding: .25rem .4rem; font-size: .75rem; }
 }
 </style>
 
@@ -205,7 +210,7 @@ input, select, textarea, button { max-width: 100%; }
   .custom-select { width: 100% !important; }
   .calendar-area { padding: 14px !important; }
   #calendar { min-width: 0; max-width: 100%; overflow-x: auto; }
-  #calendar .fc { min-width: 620px; }
+  #calendar .fc { width: 100%; min-width: 0; }
   .login-card { width: min(340px, calc(100% - 28px)); padding: 28px 22px; }
   .container-fluid, .container { max-width: 100%; }
   .container-fluid.px-5 { padding-left: 14px !important; padding-right: 14px !important; }
@@ -259,11 +264,9 @@ input, select, textarea, button { max-width: 100%; }
                     
                     <i class="bi bi-bell-fill" style="color: #d4af37;"></i>
                     
-                    {% if num_pendents > 0 %}
-                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.65rem; padding: 4px 6px; border: 2px solid #0f0f0f;">
-                            {{ num_pendents }}
-                        </span>
-                    {% endif %}
+                    <span id="badge-pendents" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.65rem; padding: 4px 6px; border: 2px solid #0f0f0f; {% if num_pendents == 0 %}display:none;{% endif %}">
+                        {{ num_pendents }}
+                    </span>
                     
                 </a>
             {% endif %}
@@ -344,7 +347,7 @@ input, select, textarea, button { max-width: 100%; }
             <div id="col-notificacions" class="col-md-3 d-none transition-all">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 class="fw-bold m-0"><i class="bi bi-lightning-charge-fill text-warning"></i> PENDENTS</h5>
-                    <span class="badge bg-dark" style="color:var(--accent)">{{ num_pendents }}</span>
+                    <span id="badge-pendents-lateral" class="badge bg-dark" style="color:var(--accent)">{{ num_pendents }}</span>
                 </div>
                 
                 <div id="llista-notis-lateral">
@@ -428,7 +431,7 @@ input, select, textarea, button { max-width: 100%; }
                 Array.from(document.querySelectorAll('.space-filter-checkbox:checked')).map(casella => String(casella.value))
             );
             calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: esConserge ? 'timeGridDay' : 'timeGridWeek',
+                initialView: (window.matchMedia('(max-width: 767.98px)').matches || esConserge) ? 'timeGridDay' : 'timeGridWeek',
                 locale: 'ca',
                 
                 // --- PODERS DEL TÈCNIC ---
@@ -497,6 +500,7 @@ input, select, textarea, button { max-width: 100%; }
                 buttonText: { today: 'Avui', month: 'Mes', week: 'Setmana', day: 'Dia' },
                 events: '/api/reserves/',
                 datesSet: function(info) { actualitzarHorarisConsergeria(info); },
+                dayHeaderFormat: window.matchMedia('(max-width: 767.98px)').matches ? { weekday: 'short', day: 'numeric' } : { weekday: 'long' },
                 dayHeaderDidMount: function() { requestAnimationFrame(renderHorarisConsergeria); },
                 dayCellDidMount: function() { requestAnimationFrame(renderHorarisConsergeria); },
                 
@@ -786,14 +790,49 @@ input, select, textarea, button { max-width: 100%; }
                 showCancelButton: true,
                 showDenyButton: true,
                 showConfirmButton: true,
-                cancelButtonText: 'Tancar',
+                showCloseButton: true,
+                cancelButtonText: 'Anul·lar reserva',
                 confirmButtonText: 'Modificar reserva',
-                denyButtonText: 'Anul·lar reserva',
+                denyButtonText: 'Canviar títol',
                 confirmButtonColor: '#198754',
-                denyButtonColor: '#dc3545'
+                denyButtonColor: '#0d6efd',
+                cancelButtonColor: '#dc3545'
             });
 
-            if (accio.isConfirmed) {
+            if (accio.isDenied) {
+                const títolNou = await Swal.fire({
+                    title: 'Canviar títol de l’activitat',
+                    input: 'text',
+                    inputLabel: 'Nom de l’activitat',
+                    inputValue: String(info.event.title).split(':').slice(1).join(':').trim(),
+                    showCancelButton: true,
+                    confirmButtonText: 'Desar títol',
+                    cancelButtonText: 'Tornar',
+                    confirmButtonColor: '#198754',
+                    inputValidator: valor => !valor || !valor.trim() ? 'Escriu el nom de l’activitat.' : undefined,
+                    preConfirm: async valor => {
+                        const dades = new FormData();
+                        dades.append('titol', valor.trim());
+                        dades.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+                        const url = "{% url 'modificar_titol_reserva_entitat' 0 %}".replace('/0/', `/${id}/`);
+                        try {
+                            const response = await fetch(url, { method: 'POST', body: dades, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                            const resultat = await response.json();
+                            if (!response.ok || resultat.status !== 'ok') throw new Error(resultat.message || 'No s’ha pogut canviar el títol.');
+                            return resultat;
+                        } catch (error) {
+                            Swal.showValidationMessage(error.message || 'Error de connexió.');
+                            return false;
+                        }
+                    },
+                    showLoaderOnConfirm: true,
+                    allowOutsideClick: () => !Swal.isLoading()
+                });
+                if (títolNou.isConfirmed) {
+                    await Swal.fire({ title: 'Títol actualitzat', text: títolNou.value.message, icon: 'success' });
+                    calendar.refetchEvents();
+                }
+            } else if (accio.isConfirmed) {
                 const resposta = await Swal.fire({
                     title: 'Modificar reserva',
                     html: `<div class="text-start">
@@ -849,7 +888,7 @@ input, select, textarea, button { max-width: 100%; }
                     await Swal.fire({ title: 'Reserva modificada', text: resposta.value.message, icon: 'success' });
                     calendar.refetchEvents();
                 }
-            } else if (accio.isDenied) {
+            } else if (accio.dismiss === Swal.DismissReason.cancel) {
                 const confirmacio = await Swal.fire({
                     title: 'Anul·lar reserva?',
                     text: 'S’avisarà les entitats i s’alliberarà l’espai reservat.',
@@ -900,11 +939,7 @@ input, select, textarea, button { max-width: 100%; }
                     calendar.refetchEvents(); 
 
                     // Actualitzar campaneta
-                    const badge = document.getElementById('badge-pendents');
-                    if (badge) {
-                        badge.innerText = data.num_pendents;
-                        badge.style.display = data.num_pendents > 0 ? 'inline-block' : 'none';
-                    }
+                    actualitzarContadors(Number(data.num_pendents || 0));
 
                     // Treure targeta lateral
                     const targeta = document.getElementById(`reserva-lateral-${id}`);
@@ -912,7 +947,16 @@ input, select, textarea, button { max-width: 100%; }
                         targeta.style.transition = 'all 0.4s ease';
                         targeta.style.opacity = '0';
                         targeta.style.transform = 'translateX(30px)';
-                        setTimeout(() => targeta.remove(), 400);
+                        setTimeout(() => {
+                            targeta.remove();
+                            const llista = document.getElementById('llista-notis-lateral');
+                            if (llista && !llista.querySelector('.card-noti')) {
+                                const buit = document.createElement('div');
+                                buit.className = 'text-center py-5 bg-white rounded-3 shadow-sm';
+                                buit.innerHTML = '<i class="bi bi-check-all display-4 text-success opacity-50"></i><p class="small fw-bold text-muted mt-2">No hi ha cap reserva pendent</p>';
+                                llista.appendChild(buit);
+                            }
+                        }, 400);
                     }
 
                     // 👇 NOMÉS MOSTRAR L'ALERTA SI NO ÉS UNA ACCIÓ SILENCIOSA
@@ -950,10 +994,11 @@ input, select, textarea, button { max-width: 100%; }
         }
 
         function actualitzarContadors(total) {
-            const badges = document.querySelectorAll('.badge-notify, .badge.bg-dark');
-            badges.forEach(b => {
-                b.innerText = total;
-                b.style.display = total > 0 ? 'inline-block' : 'none';
+            ['badge-pendents', 'badge-pendents-lateral'].forEach(id => {
+                const badge = document.getElementById(id);
+                if (!badge) return;
+                badge.textContent = total;
+                badge.style.display = total > 0 ? 'inline-block' : 'none';
             });
         }
 
@@ -1277,7 +1322,8 @@ input, select, textarea, button { max-width: 100%; }
                     '<label for="plantilla-data-inici" class="small fw-bold">Data d’inici:</label>' +
                     '<input id="plantilla-data-inici" type="date" class="form-control mb-3" value="' + formatDate(dataInicialCalendari) + '" required>' +
                     '<label for="plantilla-data-fi" class="small fw-bold">Data final:</label>' +
-                    '<input id="plantilla-data-fi" type="date" class="form-control" value="' + formatDate(dataFinalCalendari) + '" required></div>',
+                    '<input id="plantilla-data-fi" type="date" class="form-control" value="' + formatDate(dataFinalCalendari) + '" required></div>' +
+                    '<div class="alert alert-warning small text-start mt-3 mb-0">Només se substituiran les reserves identificades com a generades des de plantilla dins d’aquest període. Les reserves manuals, de les entitats i els registres antics sense aquesta marca es conservaran.</div>',
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonText: 'SÍ, APLICA',
@@ -1298,11 +1344,18 @@ input, select, textarea, button { max-width: 100%; }
                 }
             }).then((result) => {
                 if (result.isConfirmed) {
-                    const params = new URLSearchParams({
-                        data_inici: result.value.dataInici,
-                        data_fi: result.value.dataFi
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = "{% url 'aplicar_plantilla' %}";
+                    [['data_inici', result.value.dataInici], ['data_fi', result.value.dataFi], ['csrfmiddlewaretoken', '{{ csrf_token }}']].forEach(([name, value]) => {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = name;
+                        input.value = value;
+                        form.appendChild(input);
                     });
-                    window.location.href = "/aplicar-plantilla/?" + params.toString();
+                    document.body.appendChild(form);
+                    form.submit();
                 }
             });
         } else {

@@ -400,6 +400,10 @@ def api_reserves(request):
         # Entitats i calendari públic no reben les notes internes de consergeria.
         reserves = Reserva.objects.filter(estat='validada').exclude(activitat__icontains='CONSERGE')
 
+    # Les sol·licituds rebutjades es conserven com a registre, però no es mostren
+    # en cap calendari ni compten com a ocupació.
+    reserves = reserves.exclude(estat='rebutjada')
+
     if rang_start and rang_end and rang_end > rang_start:
         reserves = reserves.filter(inici__lt=rang_end, final__gt=rang_start)
 
@@ -474,7 +478,9 @@ def api_reserves(request):
 # 9. CONTEXT PROCESSOR / UTILITATS
 def comptador_pendents(request):
     if request.user.is_authenticated and request.user.is_staff:
-        quantes = Reserva.objects.filter(estat__iexact='pendent').count()
+        quantes = Reserva.objects.filter(
+            estat__iexact='pendent', inici__gte=timezone.now()
+        ).count()
         return {'num_pendents': quantes}
     return {'num_pendents': 0}
 
@@ -774,7 +780,7 @@ def accio_reserva(request):
                 'status': 'ok',
                 'message': f'S’han creat {len(noves_reserves)} reserves.',
                 'num_creades': len(noves_reserves),
-                'num_pendents': Reserva.objects.filter(estat='pendent').count(),
+                'num_pendents': Reserva.objects.filter(estat='pendent', inici__gte=timezone.now()).count(),
                 'estat_final': 'validada'
             })
 
@@ -790,7 +796,7 @@ def accio_reserva(request):
         return JsonResponse({
             'status': 'ok',
             'message': 'Activitat creada correctament',
-            'num_pendents': Reserva.objects.filter(estat='pendent').count(),
+            'num_pendents': Reserva.objects.filter(estat='pendent', inici__gte=timezone.now()).count(),
             'estat_final': 'validada'
         })
 
@@ -843,7 +849,7 @@ def accio_reserva(request):
         return JsonResponse({
             'status': 'ok',
             'message': 'Avís enviat al tècnic.',
-            'num_pendents': Reserva.objects.filter(estat='pendent').count(),
+            'num_pendents': Reserva.objects.filter(estat='pendent', inici__gte=timezone.now()).count(),
             'estat_final': reserva.estat
         })
 
@@ -870,7 +876,7 @@ def accio_reserva(request):
 
     return JsonResponse({
         'status': 'ok',
-        'num_pendents': Reserva.objects.filter(estat='pendent').count(),
+        'num_pendents': Reserva.objects.filter(estat='pendent', inici__gte=timezone.now()).count(),
         'estat_final': estat_final
     })
 
@@ -914,32 +920,44 @@ from datetime import datetime, timedelta
 
 from datetime import datetime, timedelta
 
-@login_required
+@staff_member_required
+@require_POST
 def aplicar_plantilla_al_calendari(request):
-    if request.user.is_staff:
-        from .models import PlantillaReserva, Reserva
-        from django.utils import timezone
+    """Substitueix dins del període només les reserves marcades com a plantilla.
 
-        data_inici_str = request.GET.get('data_inici') or request.GET.get('data_dilluns')
-        data_fi_str = request.GET.get('data_fi')
+    Les reserves antigues sense aquesta marca i les reserves manuals/de les entitats
+    queden intactes. La transacció evita deixar el període buit si hi ha un error.
+    """
+    data_inici_str = request.POST.get('data_inici') or request.POST.get('data_dilluns')
+    data_fi_str = request.POST.get('data_fi')
 
-        try:
-            data_inici = datetime.strptime(data_inici_str, '%Y-%m-%d').date() if data_inici_str else timezone.now().date()
-            data_fi = datetime.strptime(data_fi_str, '%Y-%m-%d').date() if data_fi_str else data_inici + timedelta(days=6 - data_inici.weekday())
-        except ValueError:
-            messages.error(request, "Les dates del període no són vàlides.")
-            return redirect('inici')
+    try:
+        data_inici = datetime.strptime(data_inici_str, '%Y-%m-%d').date() if data_inici_str else timezone.now().date()
+        data_fi = datetime.strptime(data_fi_str, '%Y-%m-%d').date() if data_fi_str else data_inici + timedelta(days=6 - data_inici.weekday())
+    except (TypeError, ValueError):
+        messages.error(request, "Les dates del període no són vàlides.")
+        return redirect('inici')
 
-        if data_fi < data_inici:
-            messages.error(request, "La data final no pot ser anterior a la data inicial.")
-            return redirect('inici')
+    if data_fi < data_inici:
+        messages.error(request, "La data final no pot ser anterior a la data inicial.")
+        return redirect('inici')
 
-        plantilla = PlantillaReserva.objects.exclude(
-            instalacio__nom__icontains='personal esports'
-        ).exclude(
-            instalacio__nom__icontains='extraordin'
-        )
-        creades = 0
+    plantilla = PlantillaReserva.objects.exclude(
+        instalacio__nom__icontains='personal esports'
+    ).exclude(
+        instalacio__nom__icontains='extraordin'
+    )
+    inici_periode = timezone.make_aware(datetime.combine(data_inici, datetime.min.time()))
+    fi_periode = timezone.make_aware(datetime.combine(data_fi + timedelta(days=1), datetime.min.time()))
+    creades = 0
+    eliminades = 0
+
+    with transaction.atomic():
+        eliminades, _ = Reserva.objects.filter(
+            origen_plantilla=True,
+            inici__gte=inici_periode,
+            inici__lt=fi_periode
+        ).delete()
 
         for dies_des_de_l_inici in range((data_fi - data_inici).days + 1):
             data_reserva = data_inici + timedelta(days=dies_des_de_l_inici)
@@ -949,9 +967,12 @@ def aplicar_plantilla_al_calendari(request):
 
                 dt_inici = timezone.make_aware(datetime.combine(data_reserva, item.inici))
                 dt_final = timezone.make_aware(datetime.combine(data_reserva, item.final))
-
+                espais_solapats = [item.instalacio_id]
+                if item.instalacio.parent_id:
+                    espais_solapats.append(item.instalacio.parent_id)
+                espais_solapats.extend(item.instalacio.sub_espais.values_list('id', flat=True))
                 hi_ha_solapament = Reserva.objects.filter(
-                    instalacio=item.instalacio,
+                    instalacio_id__in=espais_solapats,
                     inici__lt=dt_final,
                     final__gt=dt_inici
                 ).exclude(estat='rebutjada').exists()
@@ -964,12 +985,12 @@ def aplicar_plantilla_al_calendari(request):
                         inici=dt_inici,
                         final=dt_final,
                         activitat=f"{nom_usuari}: {item.activitat}",
-                        estat='validada'
+                        estat='validada',
+                        origen_plantilla=True
                     )
                     creades += 1
 
-        messages.success(request, f"✨ Plantilla aplicada del {data_inici.strftime('%d/%m/%Y')} al {data_fi.strftime('%d/%m/%Y')}")
-
+    messages.success(request, f"✨ Plantilla substituïda del {data_inici.strftime('%d/%m/%Y')} al {data_fi.strftime('%d/%m/%Y')}: {eliminades} reserves de plantilla substituïdes i {creades} creades.")
     return redirect('inici')
 @login_required
 def gestio_plantilla(request):
@@ -1185,6 +1206,33 @@ def _reserva_amb_nom_entitat(reserva, user):
         reserva.activitat.casefold().startswith(prefix.casefold())
         for prefix in _prefixos_nom_entitat_calendari(user)
     )
+
+
+@login_required
+@require_POST
+def modificar_titol_reserva_entitat(request, pk):
+    reserva = get_object_or_404(Reserva, pk=pk)
+    es_conserge = request.user.groups.filter(name='Conserge').exists()
+    if request.user.is_staff or es_conserge or not _reserva_amb_nom_entitat(reserva, request.user):
+        return JsonResponse({'status': 'error', 'message': 'Només pots canviar el títol d’una reserva que apareix al teu nom.'}, status=403)
+    if reserva.estat not in ('pendent', 'validada'):
+        return JsonResponse({'status': 'error', 'message': 'Aquesta reserva ja no es pot modificar.'}, status=400)
+
+    titol = (request.POST.get('titol') or '').strip()
+    if not titol:
+        return JsonResponse({'status': 'error', 'message': 'Escriu el nom de l’activitat.'}, status=400)
+
+    prefix = next(
+        (reserva.activitat[:len(p)] for p in _prefixos_nom_entitat_calendari(request.user)
+         if reserva.activitat.casefold().startswith(p.casefold())),
+        None
+    )
+    if not prefix or len(prefix) + 1 + len(titol) > reserva._meta.get_field('activitat').max_length:
+        return JsonResponse({'status': 'error', 'message': 'El títol és massa llarg.'}, status=400)
+
+    reserva.activitat = f'{prefix} {titol}'
+    reserva.save(update_fields=['activitat'])
+    return JsonResponse({'status': 'ok', 'message': 'El títol de l’activitat s’ha actualitzat.'})
 
 
 @login_required
