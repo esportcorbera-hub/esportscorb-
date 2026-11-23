@@ -96,12 +96,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if DATABASE_URL:
-    # Si existeix la variable (Producció a Vercel)
+    # SSL és necessari a PostgreSQL remot, però no és una opció vàlida a SQLite.
+    # Això permet entorns de prova aïllats amb una URL SQLite.
+    es_postgresql = DATABASE_URL.startswith(('postgres://', 'postgresql://'))
     DATABASES = {
         'default': dj_database_url.config(
             default=DATABASE_URL,
             conn_max_age=600,
-            ssl_require=True
+            ssl_require=es_postgresql
         )
     }
 else:
