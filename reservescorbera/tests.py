@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import ActivitatExtra, Instalacio, PlantillaReserva, Reserva
+from .models import ActivitatExtra, HorariConserge, Instalacio, PlantillaReserva, Reserva
 
 
 class EntityReservationTitleTests(TestCase):
@@ -226,3 +226,54 @@ class ApplyTemplateReplacementTests(TestCase):
         )
         self.assertEqual(response.status_code, 405)
         self.assertTrue(Reserva.objects.filter(pk=self.old_template_reservation.pk).exists())
+
+
+class ConciergeDayTests(TestCase):
+    def setUp(self):
+        self.technician = User.objects.create_user(username='tecnic', is_staff=True)
+        self.concierge = User.objects.create_user(username='conserge', is_staff=True)
+        self.concierge.groups.add(Group.objects.create(name='Conserge'))
+        self.horari = HorariConserge.objects.create(
+            conserge=self.concierge, torn='A', data_inici='2030-04-01'
+        )
+        self.url = reverse('modificar_dia_consergeria', args=[self.horari.pk])
+        self.client.force_login(self.technician)
+
+    def calendar(self):
+        response = self.client.get(reverse('api_horaris_consergeria'), {
+            'start': '2030-04-01T00:00:00+02:00',
+            'end': '2030-05-01T00:00:00+02:00',
+        })
+        return {item['data']: item for item in response.json()}
+
+    def test_edit_and_remove_affect_only_the_selected_date(self):
+        before = self.calendar()
+        response = self.client.post(self.url, {
+            'data': '2030-04-01', 'accio': 'desar', 'inici': '15:00', 'final': '24:00',
+        })
+        self.assertEqual(response.status_code, 200)
+        expected = before | {'2030-04-01': before['2030-04-01'] | {'inici': '15:00', 'final': '24:00'}}
+
+        self.client.force_login(self.concierge)
+        self.assertEqual(self.calendar(), expected)
+
+        self.client.force_login(self.technician)
+        response = self.client.post(self.url, {'data': '2030-04-01', 'accio': 'eliminar'})
+        self.assertEqual(response.status_code, 200)
+        del expected['2030-04-01']
+        self.assertEqual(self.calendar(), expected)
+        self.horari.refresh_from_db()
+        self.assertEqual(self.horari.torn, 'A')
+
+    def test_concierge_cannot_change_own_schedule(self):
+        self.client.force_login(self.concierge)
+        response = self.client.post(self.url, {'data': '2030-04-01', 'accio': 'eliminar'})
+        self.assertEqual(response.status_code, 403)
+
+    def test_invalid_hours_and_unscheduled_day_are_rejected(self):
+        response = self.client.post(self.url, {
+            'data': '2030-04-01', 'accio': 'desar', 'inici': '24:00', 'final': '14:30',
+        })
+        self.assertEqual(response.status_code, 400)
+        response = self.client.post(self.url, {'data': '2030-04-03', 'accio': 'eliminar'})
+        self.assertEqual(response.status_code, 404)

@@ -113,3 +113,16 @@ class HorariConserge(models.Model):
 
     def __str__(self):
         return f"{self.conserge} - {self.get_torn_display()} des de {self.data_inici}"
+
+
+class ExcepcioHorariConserge(models.Model):
+    horari = models.ForeignKey(HorariConserge, on_delete=models.CASCADE)
+    data = models.DateField()
+    inici = models.CharField(max_length=5, blank=True)
+    final = models.CharField(max_length=5, blank=True)
+    eliminat = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['horari', 'data'], name='unique_excepcio_horari_dia')
+        ]

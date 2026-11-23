@@ -387,6 +387,7 @@ input, select, textarea, button { max-width: 100%; }
     <script>
         let calendar;
         let horarisConsergeriaPerDia = {};
+        let peticioHoraris = 0;
         // Constants de Rol
         const esConserge = {{ es_conserge|yesno:"true,false" }};
         const esStaff = "{{ user.is_staff }}" === "True";
@@ -1087,10 +1088,12 @@ input, select, textarea, button { max-width: 100%; }
 
         function actualitzarHorarisConsergeria(info) {
             if (!esConserge && !esTecnic) return Promise.resolve();
+            const peticio = ++peticioHoraris;
             const params = new URLSearchParams({ start: info.startStr, end: info.endStr });
             return fetch(`/api/horaris-consergeria/?${params.toString()}`)
                 .then(response => response.ok ? response.json() : [])
                 .then(horaris => {
+                    if (peticio !== peticioHoraris) return;
                     horarisConsergeriaPerDia = {};
                     horaris.forEach(horari => {
                         if (!horarisConsergeriaPerDia[horari.data]) horarisConsergeriaPerDia[horari.data] = [];
@@ -1114,13 +1117,93 @@ input, select, textarea, button { max-width: 100%; }
                 const llista = document.createElement('div');
                 llista.className = 'horaris-consergeria-dia';
                 horaris.forEach(horari => {
-                    const etiqueta = document.createElement('span');
+                    const etiqueta = document.createElement(esTecnic ? 'button' : 'span');
+                    if (esTecnic) {
+                        etiqueta.type = 'button';
+                        etiqueta.addEventListener('click', () => editarDiaConsergeria(horari));
+                    }
                     etiqueta.className = 'horari-conserge-etiqueta';
                     etiqueta.textContent = `${horari.persona} · ${horari.espai} · ${horari.inici}–${horari.final}`;
                     etiqueta.title = `${horari.persona} — ${horari.espai} — ${horari.inici}–${horari.final}`;
                     llista.appendChild(etiqueta);
                 });
                 contenidor.appendChild(llista);
+            });
+        }
+
+        async function editarDiaConsergeria(horari) {
+            const dia = new Intl.DateTimeFormat('ca-ES', { dateStyle: 'full' })
+                .format(new Date(horari.data + 'T00:00:00'));
+            const decisio = await Swal.fire({
+                titleText: horari.persona,
+                html: `<p id="dia-consergeria"></p>
+                    <div class="text-start">
+                        <label for="dia-cons-inici">Hora d’inici</label>
+                        <input id="dia-cons-inici" class="form-control mb-2" placeholder="HH:MM" maxlength="5">
+                        <label for="dia-cons-final">Hora final</label>
+                        <input id="dia-cons-final" class="form-control" placeholder="HH:MM" maxlength="5">
+                    </div>`,
+                didOpen: () => {
+                    document.getElementById('dia-consergeria').textContent = dia;
+                    document.getElementById('dia-cons-inici').value = horari.inici;
+                    document.getElementById('dia-cons-final').value = horari.final;
+                },
+                showCancelButton: true,
+                showDenyButton: true,
+                confirmButtonText: 'Desar horari del dia',
+                denyButtonText: 'Eliminar horari del dia',
+                cancelButtonText: 'Tancar',
+                showLoaderOnConfirm: true,
+                allowOutsideClick: () => !Swal.isLoading(),
+                preConfirm: async () => {
+                    try {
+                        await desarDiaConsergeria(horari, 'desar', {
+                            inici: document.getElementById('dia-cons-inici').value,
+                            final: document.getElementById('dia-cons-final').value
+                        });
+                        return true;
+                    } catch (error) {
+                        Swal.showValidationMessage(error.message);
+                        return false;
+                    }
+                }
+            });
+            if (decisio.isDenied) {
+                await Swal.fire({
+                    title: 'Eliminar l’horari d’aquest dia?',
+                    text: horari.persona + ' · ' + dia,
+                    showCancelButton: true,
+                    confirmButtonText: 'Eliminar',
+                    cancelButtonText: 'Tancar',
+                    confirmButtonColor: '#dc3545',
+                    showLoaderOnConfirm: true,
+                    allowOutsideClick: () => !Swal.isLoading(),
+                    preConfirm: async () => {
+                        try {
+                            await desarDiaConsergeria(horari, 'eliminar');
+                            return true;
+                        } catch (error) {
+                            Swal.showValidationMessage(error.message);
+                            return false;
+                        }
+                    }
+                });
+            }
+        }
+
+        async function desarDiaConsergeria(horari, accio, hores = {}) {
+            const url = "{% url 'modificar_dia_consergeria' 0 %}".replace('/0/', `/${horari.id_horari}/`);
+            const dades = new URLSearchParams({
+                data: horari.data, accio, csrfmiddlewaretoken: '{{ csrf_token }}', ...hores
+            });
+            const resposta = await fetch(url, { method: 'POST', body: dades });
+            const resultat = await resposta.json().catch(() => ({}));
+            if (!resposta.ok || resultat.status !== 'ok') {
+                throw new Error(resultat.error || 'No s’ha pogut desar l’horari del dia.');
+            }
+            await actualitzarHorarisConsergeria({
+                startStr: calendar.view.activeStart.toISOString(),
+                endStr: calendar.view.activeEnd.toISOString()
             });
         }
 

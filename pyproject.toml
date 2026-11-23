@@ -29,3 +29,7 @@ dependencies = [
   "whitenoise==6.11.0",
   "gunicorn==23.0.0",
 ]
+
+
+[tool.vercel.scripts]
+build = 'if [ "$VERCEL_ENV" = production ]; then python manage.py shell < reservescorbera/aplicar_excepcio_consergeria.py; fi'

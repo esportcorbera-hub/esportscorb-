@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.db import IntegrityError, transaction
 from django.db.models import Q  
 from datetime import datetime
-from .models import Instalacio, Reserva, PlantillaReserva, ActivitatExtra, HorariConserge
+from .models import Instalacio, Reserva, PlantillaReserva, ActivitatExtra, HorariConserge, ExcepcioHorariConserge
 from .forms import UserProfileForm  # El punt (.) vol dir "en aquesta mateixa carpeta"
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth import update_session_auth_hash
@@ -17,7 +17,7 @@ from datetime import timedelta
 from django.core.mail import send_mail
 from django.conf import settings
 from django.views.decorators.http import require_POST
-from django.utils.dateparse import parse_datetime
+from django.utils.dateparse import parse_datetime, parse_date
 
 # 1. HOME PÚBLIC
 def home(request):
@@ -1521,6 +1521,66 @@ def _serialitzar_horari_conserge(horari):
     }
 
 
+def _franja_rotacio_conserge(horari, data):
+    seq = ROTACIO_TORNS_CONSERGERIA.get(horari.torn)
+    if not seq or data < horari.data_inici:
+        return None, None
+
+    dilluns = horari.data_inici - timedelta(days=horari.data_inici.weekday())
+    setmana = (data - dilluns).days // 7
+    patro = TORNS_CONSERGERIA[seq[setmana % len(seq)]]
+    return patro, patro['dies'].get(data.weekday())
+
+
+def _minuts_horari_conserge(valor):
+    if valor == '24:00':
+        return 24 * 60
+    try:
+        hora = datetime.strptime(valor, '%H:%M')
+    except ValueError:
+        return None
+    if hora.strftime('%H:%M') != valor:
+        return None
+    return hora.hour * 60 + hora.minute
+
+
+@staff_member_required
+@require_POST
+def modificar_dia_consergeria(request, pk):
+    if not _es_tecnic_consergeria(request.user):
+        return JsonResponse({'error': 'Només el tècnic pot modificar els horaris.'}, status=403)
+
+    try:
+        data = parse_date(request.POST.get('data', ''))
+    except ValueError:
+        data = None
+    accio = request.POST.get('accio')
+    if not data or accio not in {'desar', 'eliminar'}:
+        return JsonResponse({'error': 'La data o l’acció no és vàlida.'}, status=400)
+
+    inici = final = ''
+    if accio == 'desar':
+        inici = request.POST.get('inici', '').strip()
+        final = request.POST.get('final', '').strip()
+        minut_inici = _minuts_horari_conserge(inici)
+        minut_final = _minuts_horari_conserge(final)
+        if minut_inici is None or minut_final is None or minut_inici >= minut_final:
+            return JsonResponse({'error': 'Introdueix hores vàlides (HH:MM) amb el final posterior a l’inici.'}, status=400)
+
+    with transaction.atomic():
+        horari = get_object_or_404(HorariConserge.objects.select_for_update(), pk=pk, actiu=True)
+        _, franja = _franja_rotacio_conserge(horari, data)
+        if not franja:
+            return JsonResponse({'error': 'Aquest conserge no té cap horari assignat el dia seleccionat.'}, status=404)
+
+        ExcepcioHorariConserge.objects.update_or_create(
+            horari=horari,
+            data=data,
+            defaults={'inici': inici, 'final': final, 'eliminat': accio == 'eliminar'},
+        )
+    return JsonResponse({'status': 'ok'})
+
+
 @login_required
 def api_horaris_consergeria(request):
     es_conserge = request.user.groups.filter(name='Conserge').exists()
@@ -1547,6 +1607,13 @@ def api_horaris_consergeria(request):
     for assignacio in assignacions:
         per_persona.setdefault(assignacio.conserge_id, []).append(assignacio)
 
+    excepcions = {
+        (item.horari_id, item.data): item
+        for item in ExcepcioHorariConserge.objects.filter(
+            horari__in=assignacions, data__gte=data_inici, data__lt=data_final
+        )
+    }
+
     resultats = []
     for offset in range((data_final - data_inici).days):
         data = data_inici + timedelta(days=offset)
@@ -1558,23 +1625,18 @@ def api_horaris_consergeria(request):
             if not assignacio:
                 continue
 
-            # El cicle queda ancorat a setmanes completes (dilluns-diumenge).
-            # També normalitza assignacions antigues amb una data d'inici no dilluns.
-            inici_setmana = assignacio.data_inici - timedelta(days=assignacio.data_inici.weekday())
-            setmanes = (data - inici_setmana).days // 7
-            seq = ROTACIO_TORNS_CONSERGERIA.get(assignacio.torn)
-            if not seq or len(seq) != 4:
-                continue
-            # Quatre setmanes fixes; després el cicle torna a començar indefinidament.
-            torn_actual = seq[setmanes % 4]
-            patro = TORNS_CONSERGERIA.get(torn_actual)
-            if not patro:
-                continue
-            franja = patro['dies'].get(data.weekday())
+            patro, franja = _franja_rotacio_conserge(assignacio, data)
             if not franja:
                 continue
+
+            excepcio = excepcions.get((assignacio.pk, data))
+            if excepcio:
+                if excepcio.eliminat:
+                    continue
+                franja = excepcio.inici, excepcio.final
             resultats.append({
                 'data': data.isoformat(),
+                'id_horari': assignacio.pk,
                 'persona': assignacio.conserge.get_full_name() or assignacio.conserge.username,
                 'torn': patro['nom'],
                 'espai': patro['espai'],
