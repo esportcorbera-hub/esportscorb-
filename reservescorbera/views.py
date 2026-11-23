@@ -14,10 +14,8 @@ from .forms import UserProfileForm  # El punt (.) vol dir "en aquesta mateixa ca
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth import update_session_auth_hash
 from datetime import timedelta
-import re
 from django.core.mail import send_mail
 from django.conf import settings
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.utils.dateparse import parse_datetime
 
@@ -57,7 +55,8 @@ def inici(request):
     # 2. DADES PER AL TÈCNIC / CONSERGE
     pendents = []
     num_pendents = 0
-    es_tecnic = request.user.is_staff and not request.user.groups.filter(name='Conserge').exists()
+    es_conserge = request.user.groups.filter(name='Conserge').exists()
+    es_tecnic = request.user.is_staff and not es_conserge
     entitats = list(User.objects.filter(is_active=True, is_staff=False).order_by('first_name', 'username')) if es_tecnic else []
     if es_tecnic:
         entitats.insert(0, request.user)
@@ -82,7 +81,8 @@ def inici(request):
         'entitats': entitats,
         'conserges': conserges,
         'instalacions_edicio': Instalacio.objects.exclude(nom__icontains='personal esports').exclude(nom__icontains='extraordin').order_by('nom'),
-        'es_tecnic': request.user.is_staff
+        'es_tecnic': es_tecnic,
+        'es_conserge': es_conserge,
     }
     
     return render(request, 'reservescorbera/inici.html', context)
@@ -316,42 +316,6 @@ def api_hores_ocupades(request):
         return JsonResponse([], safe=False)
 
     # 1. Busquem les reserves. 
-    # Filtrem per instal·lació i data, només les que NO estan rebutjades.
-    reserves = Reserva.objects.filter(
-        instalacio_id=inst_id, 
-        inici__date=dia_triat, 
-        estat__in=['pendent', 'validada']
-    )
-    
-    ocupades = []
-    
-    for r in reserves:
-        # 2. CONVERSIÓ A HORA LOCAL (Molt important)
-        # Si Django usa Timezones, convertim l'hora de la BD a l'hora que veu l'usuari
-        inici_local = timezone.localtime(r.inici)
-        final_local = timezone.localtime(r.final)
-        
-        actual = inici_local
-        while actual < final_local:
-            # Afegim l'hora en format "HH:MM" (ex: "09:15")
-            ocupades.append(actual.strftime('%H:%M'))
-            actual += timedelta(minutes=15)
-            
-    # 3. Retornem la llista única (set) per evitar duplicats
-    return JsonResponse(list(set(ocupades)), safe=False)
-
-from django.utils import timezone
-from datetime import timedelta
-from django.http import JsonResponse
-
-def api_hores_ocupades(request):
-    dia_triat = request.GET.get('data') 
-    inst_id = request.GET.get('instalacio')
-    
-    if not dia_triat or not inst_id:
-        return JsonResponse([], safe=False)
-
-    # 1. Busquem les reserves. 
     reserves = Reserva.objects.filter(
         instalacio_id=inst_id, 
         inici__date=dia_triat, 
@@ -409,7 +373,7 @@ def api_reserves(request):
 
     # Load each reservation's facility and parent in the same query.
     reserves = reserves.select_related('instalacio', 'instalacio__parent').only(
-        'id', 'activitat', 'inici', 'final', 'estat',
+        'id', 'activitat', 'inici', 'final', 'estat', 'entitat_id',
         'instalacio__id', 'instalacio__nom', 'instalacio__color', 'instalacio__parent__id'
     )
     
@@ -441,6 +405,7 @@ def api_reserves(request):
                         request.user.is_authenticated
                         and not es_staff
                         and not es_conserge
+                        and r.entitat_id == request.user.pk
                         and _reserva_amb_nom_entitat(r, request.user)
                     )
                 }
@@ -673,11 +638,8 @@ def pistes(request):
 @staff_member_required
 @require_POST
 def accio_reserva(request):
-    reserva_id_raw = request.POST.get('id')
     accio = request.POST.get('accio')
     
-    # Netegem la ID per si ve amb prefixos (com "extra-12")
-    reserva_id = re.sub(r'\D', '', str(reserva_id_raw)) if reserva_id_raw else None
 
     # --- A. CAS CREAR (Unificat per 'crear' o 'crear_directe') ---
     if accio in ['crear', 'crear_directe']:
@@ -800,10 +762,22 @@ def accio_reserva(request):
             'estat_final': 'validada'
         })
 
-    # --- B. GESTIÓ EXISTENTS ---
-    reserva = Reserva.objects.filter(id=reserva_id).first() if reserva_id else None
-    extra = ActivitatExtra.objects.filter(id=reserva_id).first() if reserva_id else None
-    
+    es_conserge = request.user.groups.filter(name='Conserge').exists()
+    identificador = request.POST.get('id', '')
+    es_extra = identificador.startswith('extra-')
+    reserva_id = identificador.removeprefix('extra-')
+    if not reserva_id.isascii() or not reserva_id.isdecimal():
+        return JsonResponse({'status': 'error', 'message': 'Identificador de reserva no vàlid.'}, status=400)
+
+    reserva = Reserva.objects.filter(pk=reserva_id).first() if not es_extra else None
+    extra = ActivitatExtra.objects.filter(pk=reserva_id).first() if es_extra else None
+    if not reserva and not extra:
+        return JsonResponse({'status': 'error', 'message': 'No s’ha trobat l’activitat.'}, status=404)
+
+    if es_conserge and accio != 'no_presentat':
+        if not reserva or accio != 'editar' or 'titol' in request.POST or request.POST.get('estat') not in {'validada', 'rebutjada'}:
+            return JsonResponse({'status': 'error', 'message': 'Només pots aprovar o refusar reserves.'}, status=403)
+
     if accio == 'no_presentat':
         es_conserge = request.user.groups.filter(name='Conserge').exists()
         es_tecnic = request.user.is_staff and not es_conserge
@@ -863,15 +837,22 @@ def accio_reserva(request):
     elif accio == 'editar':
         nou_titol = request.POST.get('titol')
         nou_estat = request.POST.get('estat')
+        if nou_estat and nou_estat not in dict(Reserva.ESTATS):
+            return JsonResponse({'status': 'error', 'message': 'Estat de reserva no vàlid.'}, status=400)
         
         if extra:
             if nou_titol: extra.titol = nou_titol
             extra.save()
             estat_final = 'validada'
         elif reserva:
-            if nou_titol: reserva.activitat = nou_titol
-            if nou_estat: reserva.estat = nou_estat
-            reserva.save()
+            camps = []
+            if nou_titol:
+                reserva.activitat = nou_titol
+                camps.append('activitat')
+            if nou_estat:
+                reserva.estat = nou_estat
+                camps.append('estat')
+            reserva.save(update_fields=camps)
             estat_final = reserva.estat
 
     return JsonResponse({
@@ -924,6 +905,9 @@ from datetime import datetime, timedelta
 @require_POST
 def aplicar_plantilla_al_calendari(request):
     """Substitueix dins del període només les reserves que ja estan marcades com a plantilla."""
+    if not _es_tecnic_consergeria(request.user):
+        return JsonResponse({'status': 'error', 'message': 'Només el tècnic pot enganxar la plantilla.'}, status=403)
+
     data_inici_str = request.POST.get('data_inici') or request.POST.get('data_dilluns')
     data_fi_str = request.POST.get('data_fi')
 
@@ -949,6 +933,8 @@ def aplicar_plantilla_al_calendari(request):
     eliminades = 0
 
     with transaction.atomic():
+        # Serialitza les aplicacions de plantilla, fins i tot quan encara no hi ha reserves marcades.
+        list(Instalacio.objects.order_by('pk').select_for_update().values_list('pk', flat=True))
         eliminades, _ = Reserva.objects.filter(
             origen_plantilla=True,
             inici__gte=inici_periode,
@@ -1209,7 +1195,8 @@ def _reserva_amb_nom_entitat(reserva, user):
 def modificar_titol_reserva_entitat(request, pk):
     reserva = get_object_or_404(Reserva, pk=pk)
     es_conserge = request.user.groups.filter(name='Conserge').exists()
-    if request.user.is_staff or es_conserge or not _reserva_amb_nom_entitat(reserva, request.user):
+    if (request.user.is_staff or es_conserge or reserva.entitat_id != request.user.pk
+            or not _reserva_amb_nom_entitat(reserva, request.user)):
         return JsonResponse({'status': 'error', 'message': 'Només pots canviar el títol d’una reserva que apareix al teu nom.'}, status=403)
     if reserva.estat not in ('pendent', 'validada'):
         return JsonResponse({'status': 'error', 'message': 'Aquesta reserva ja no es pot modificar.'}, status=400)
@@ -1371,8 +1358,8 @@ def modificar_reserva_entitat(request, pk):
     return JsonResponse({'status': 'ok', 'message': missatge, 'avis_enviat': avis_enviat})
 
 
-@csrf_exempt # Per evitar l'error 403 que et sortia
 @login_required
+@require_POST
 def eliminar_reserva_entitat(request):
     if request.method == "POST":
         reserva_id = request.POST.get('id')

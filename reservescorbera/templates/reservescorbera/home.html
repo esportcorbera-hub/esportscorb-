@@ -115,7 +115,7 @@ input, select, textarea, button { max-width: 100%; }
   .custom-select { width: 100% !important; }
   .calendar-area { padding: 14px !important; }
   #calendar { min-width: 0; max-width: 100%; overflow-x: auto; }
-  #calendar .fc { min-width: 620px; }
+  #calendar .fc { min-width: 0; }
   .login-card { width: min(340px, calc(100% - 28px)); padding: 28px 22px; }
   .container-fluid, .container { max-width: 100%; }
   .container-fluid.px-5 { padding-left: 14px !important; padding-right: 14px !important; }
@@ -188,7 +188,9 @@ input, select, textarea, button { max-width: 100%; }
                 Array.from(document.querySelectorAll('.facility-checkbox:checked')).map(casella => String(casella.value))
             );
             calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'timeGridWeek',
+                initialView: window.matchMedia('(max-width: 767.98px)').matches ? 'timeGridDay' : 'timeGridWeek',
+                slotEventOverlap: false,
+                dayHeaderFormat: { weekday: 'short', day: 'numeric' },
                 locale: 'ca',
                 firstDay: 1,
                 height: 'auto',
@@ -204,19 +206,14 @@ input, select, textarea, button { max-width: 100%; }
                 buttonText: { today: 'Avui', month: 'Mes', week: 'Setmana', day: 'Dia' },
                 events: '/api/reserves/',
 
-                eventDidMount: function(info) {
-                    const ev = info.event;
-                    const tipus = ev.extendedProps.tipus;
-                    const esExcepcio = tipus === 'extra' || tipus === 'conserge' || ev.allDay;
-                    const idInst = String(ev.extendedProps.id_inst || '');
-                    const idPare = String(ev.extendedProps.id_pare || '');
-                    const esSeleccionada = instalacionsSeleccionades.has(idInst) || instalacionsSeleccionades.has(idPare);
-                    info.el.style.display = esExcepcio || esSeleccionada ? '' : 'none';
+                eventDataTransform: function(eventData) {
+                    eventData.display = visualitzacioEsdeveniment(eventData.extendedProps, eventData.allDay);
+                    return eventData;
                 },
 
                 eventClick: function(info) {
                     Swal.fire({
-                        title: info.event.extendedProps.instalacio,
+                        titleText: info.event.extendedProps.instalacio,
                         text: info.event.title,
                         confirmButtonColor: '#1a1a1a'
                     });
@@ -240,6 +237,13 @@ input, select, textarea, button { max-width: 100%; }
             }));
         });
 
+        function visualitzacioEsdeveniment(props, totElDia) {
+            if (props.tipus === 'extra' || props.tipus === 'conserge' || totElDia) return 'block';
+            return instalacionsSeleccionades.has(String(props.id_inst)) || instalacionsSeleccionades.has(String(props.id_pare))
+                ? 'auto'
+                : 'none';
+        }
+
         function aplicarFiltreInstalacions() {
             if (!calendar) return;
             instalacionsSeleccionades = new Set(
@@ -248,12 +252,7 @@ input, select, textarea, button { max-width: 100%; }
 
             calendar.batchRendering(() => {
                 calendar.getEvents().forEach(ev => {
-                    const idInst = String(ev.extendedProps.id_inst || '');
-                    const idPare = String(ev.extendedProps.id_pare || '');
-                    const tipus = ev.extendedProps.tipus;
-                    const esExcepcio = tipus === 'extra' || tipus === 'conserge' || ev.allDay;
-                    const esSeleccionada = instalacionsSeleccionades.has(idInst) || instalacionsSeleccionades.has(idPare);
-                    ev.setProp('display', esExcepcio || esSeleccionada ? 'auto' : 'none');
+                    ev.setProp('display', visualitzacioEsdeveniment(ev.extendedProps, ev.allDay));
                 });
             });
         }

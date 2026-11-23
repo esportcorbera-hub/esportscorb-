@@ -1,11 +1,11 @@
 from datetime import datetime, time, timedelta
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Instalacio, PlantillaReserva, Reserva
+from .models import ActivitatExtra, Instalacio, PlantillaReserva, Reserva
 
 
 class EntityReservationTitleTests(TestCase):
@@ -50,6 +50,21 @@ class EntityReservationTitleTests(TestCase):
         self.assertEqual(self.reservation.activitat, 'CLUBCORBERA: Entrenament')
 
 
+    def test_calendar_and_title_endpoint_require_the_linked_entity(self):
+        self.reservation.entitat = self.other_entity
+        self.reservation.save(update_fields=['entitat'])
+        self.client.force_login(self.entity)
+
+        events = self.client.get(reverse('api_reserves')).json()
+        event = next(event for event in events if event['id'] == self.reservation.pk)
+        self.assertFalse(event['extendedProps']['pot_editar_entitat'])
+        response = self.client.post(
+            reverse('modificar_titol_reserva_entitat', args=[self.reservation.pk]),
+            {'titol': 'Canvi indegut'},
+        )
+        self.assertEqual(response.status_code, 403)
+
+
 class RejectedReservationCalendarTests(TestCase):
     def test_rejected_reservation_is_kept_as_record_but_hidden_from_calendar(self):
         technician = User.objects.create_user(
@@ -81,6 +96,46 @@ class RejectedReservationCalendarTests(TestCase):
         self.assertEqual(calendar_response.status_code, 200)
         self.assertNotIn(reservation.pk, [event['id'] for event in calendar_response.json()])
         self.assertTrue(Reserva.objects.filter(pk=reservation.pk, estat='rebutjada').exists())
+
+
+    def test_concierge_can_resolve_pending_reservations_with_matching_extra_ids(self):
+        concierge = User.objects.create_user(username='conserge', is_staff=True)
+        concierge.groups.add(Group.objects.create(name='Conserge'))
+        space = Instalacio.objects.create(nom='Pavelló')
+        start = timezone.now() + timedelta(days=7)
+        reservations = [
+            Reserva.objects.create(
+                entitat=concierge,
+                instalacio=space,
+                activitat='Entrenament',
+                inici=start,
+                final=start + timedelta(hours=1),
+                estat='pendent',
+            )
+            for _ in range(2)
+        ]
+        extra = ActivitatExtra.objects.create(
+            pk=reservations[0].pk,
+            titol='Avís',
+            data=start.date(),
+            inici=time(12),
+            final=time(13),
+        )
+        self.client.force_login(concierge)
+        self.assertContains(self.client.get(reverse('inici')), 'id="btn-toggle-gestio"')
+
+        for reservation, status, pending in zip(reservations, ('rebutjada', 'validada'), (1, 0)):
+            response = self.client.post(
+                reverse('accio_reserva'),
+                {'id': reservation.pk, 'accio': 'editar', 'estat': status},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()['num_pendents'], pending)
+            reservation.refresh_from_db()
+            self.assertEqual(reservation.estat, status)
+
+        extra.refresh_from_db()
+        self.assertEqual(extra.titol, 'Avís')
 
 
 class ApplyTemplateReplacementTests(TestCase):

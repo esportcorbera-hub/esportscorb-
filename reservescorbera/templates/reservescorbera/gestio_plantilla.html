@@ -63,7 +63,7 @@
 
         .calendar-header-row { 
             display: grid; 
-            grid-template-columns: repeat(7, 1fr); 
+            grid-template-columns: repeat(7, minmax(0, 1fr));
             background: var(--primary); 
             color: var(--accent); 
             text-align: center; 
@@ -76,7 +76,7 @@
 
         .calendar-body-row { 
             display: grid; 
-            grid-template-columns: repeat(7, 1fr); 
+            grid-template-columns: repeat(7, minmax(0, 1fr));
             min-height: 250px; 
         }
         .calendar-day-col { 
@@ -106,6 +106,7 @@
         }
 
         .time-text { font-weight: 800; color: var(--primary); display: block; border-bottom: 1px solid #f0f0f0; margin-bottom: 6px; padding-bottom: 4px; }
+        .activity-text, .user-text { overflow-wrap: anywhere; }
         .activity-text { font-weight: 700; color: #333; text-transform: uppercase; display: block; line-height: 1.2; padding-right: 30px; }
         .user-text { font-size: 0.75rem; color: #666; font-weight: 600; margin-top: 8px; display: flex; align-items: center; gap: 5px; }
 
@@ -175,7 +176,10 @@ input, select, textarea, button { max-width: 100%; }
   .header-section { padding: 72px 14px 28px !important; }
   .btn-tornar { left: 12px !important; top: 12px !important; }
   .calendar-container { overflow-x: auto !important; }
-  .calendar-header-row, .calendar-body-row { min-width: 700px; }
+  .calendar-header-row { display: none; }
+  .calendar-body-row { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+  .calendar-day-col { border-right: 0; border-bottom: 1px solid #eee; }
+  .calendar-day-col::before { content: attr(data-dia); display: block; font-weight: 800; margin-bottom: 8px; }
   .empty-state { padding: 28px 18px; }
   .modal-dialog { margin: 12px; }
 }
@@ -256,7 +260,7 @@ input, select, textarea, button { max-width: 100%; }
 
             <div class="calendar-body-row">
                 {% for dia_id, dia_nom in dies_setmana %}
-                <div class="calendar-day-col">
+                <div class="calendar-day-col" data-dia="{{ dia_nom }}">
                     {% for item in elements %}
                         {% if item.dia_setmana == dia_id and item.instalacio.id == inst.id %}
                             <!-- RECUPEREM EL COLOR DE LA INSTAL·LACIÓ A LA VORA DE LA CARD -->
